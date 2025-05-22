@@ -33,7 +33,7 @@ Ever wondered what would happen if a sound-blasting dog named Sheera took on an 
 
 ```bash
 # Clone this repository
-git clone https://github.com/yourusername/sheera-vs-tux.git
+git clone https://github.com/tangelis/sheeraroids.git
 
 # Navigate to the game directory
 cd sheera-vs-tux
