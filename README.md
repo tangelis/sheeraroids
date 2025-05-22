@@ -2,7 +2,7 @@
 
 ## The Epic Battle of Sound vs Linux!
 
-![Game Banner](assets/banner.png)
+![Game Screenshot](assets/SHEERAROIDS.png)
 
 ## 🎮 What is this madness?
 
@@ -26,6 +26,8 @@ Ever wondered what would happen if a sound-blasting dog named Sheera took on an 
 3. **Shield**: Hold S
 4. **Pause**: P
 5. **Quit**: ESC
+
+
 
 ## 🛠️ Installation
 
