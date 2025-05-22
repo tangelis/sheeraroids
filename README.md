@@ -57,9 +57,11 @@ Why not? Sometimes the best ideas come from the most random combinations. Sheera
 
 ## 🙏 Credits
 
-- Sheera: For her incredible sound wave abilities
+- Sheera: For being a good gurrrll
 - Tux: For being a good sport about being the villain
 - Pygame: For making this absurdity possible
+- Delores the FLorist
+- Mosey the Paddler
 
 ## 📜 License
 
