@@ -9,9 +9,16 @@ import math
 import random
 import os
 from pygame.locals import *
+import collections
 
 # Initialize pygame
 pygame.init()
+try:
+    pygame.mixer.init()
+    print("Pygame mixer initialized successfully.")
+except pygame.error as e:
+    print(f"Error initializing pygame mixer: {e}. Game will run without sound.")
+    pygame.mixer = None # type: ignore
 
 # Game constants
 WIDTH, HEIGHT = 800, 600
@@ -80,18 +87,39 @@ ship_img = load_image(os.path.join(assets_dir, "sheera.jpg"), (120, 90))  # Load
 bullet_img = load_image(os.path.join(assets_dir, "bullet.png"))
 explosion_img = load_image(os.path.join(assets_dir, "explosion.png"))
 
-# Load Tux image and create different sizes
-tux_original = load_image(os.path.join(assets_dir, "tux_original.png"))
-asteroid_images = [
-    pygame.transform.scale(tux_original, (60, 60)),  # Large
-    pygame.transform.scale(tux_original, (45, 45)),  # Medium
-    pygame.transform.scale(tux_original, (30, 30))   # Small
-]
+# Sound File Placeholders
+shoot_sound_file = os.path.join(assets_dir, "shoot.wav")
+explosion_sound_file = os.path.join(assets_dir, "explosion.wav")
+thrust_sound_file = os.path.join(assets_dir, "thrust.wav")
+player_hit_sound_file = os.path.join(assets_dir, "player_hit.wav")
+shield_activate_sound_file = os.path.join(assets_dir, "shield_on.wav")
+shield_deactivate_sound_file = os.path.join(assets_dir, "shield_off.wav")
+
+# Tux Asteroid Animation Setup
+tux_anim_filenames = [os.path.join(assets_dir, f"tux_anim_{i}.png") for i in range(2)] # Expecting tux_anim_0.png and tux_anim_1.png
+tux_animations_available = all(os.path.exists(f) for f in tux_anim_filenames)
+processed_asteroid_frames = []
+tux_sizes = [(60, 60), (45, 45), (30, 30)] # L, M, S sizes for asteroids
+
+if tux_animations_available:
+    print("Tux animation frames found. Implementing animations.")
+    base_tux_frames = [load_image(f) for f in tux_anim_filenames]
+    for target_size in tux_sizes:
+        frames_for_size = [pygame.transform.scale(frame.copy(), target_size) for frame in base_tux_frames]
+        processed_asteroid_frames.append(frames_for_size)
+else:
+    print("Tux animation frames not found or incomplete. Using static Tux image.")
+    tux_original_static = load_image(os.path.join(assets_dir, "tux_original.png")) # Renamed to avoid conflict
+    if tux_original_static.get_width() < 10: # Basic check if placeholder was loaded
+        print("Warning: tux_original.png might be a placeholder or failed to load correctly.")
+    for target_size in tux_sizes:
+        processed_asteroid_frames.append([pygame.transform.scale(tux_original_static.copy(), target_size)])
 
 # Game classes
 class Sheera(pygame.sprite.Sprite):
-    def __init__(self):
+    def __init__(self, game): # Added game argument
         pygame.sprite.Sprite.__init__(self)
+        self.game = game # Store game instance
         self.image = ship_img  # Now using the sheera.jpg image
         self.original_image = self.image
         self.rect = self.image.get_rect()
@@ -110,6 +138,11 @@ class Sheera(pygame.sprite.Sprite):
         self.hide_timer = pygame.time.get_ticks()
         self.invulnerable = False
         self.invulnerable_timer = 0
+        self.is_hit_flashing = False
+        self.hit_flash_timer = 0
+        self.hit_flash_duration = 1000  # 1 second
+        self.invulnerability_duration_on_hit = 2000  # 2 seconds
+        self.current_invulnerability_window = 0 # Stores the duration for current invulnerability
         
         # Glow effect properties
         self.heat = 0
@@ -135,14 +168,15 @@ class Sheera(pygame.sprite.Sprite):
             (0, 0, 255),      # Blue
             (75, 0, 130)      # Indigo
         ]
+        self.prev_shield_active = False # For tracking shield state change
 
     def update(self):
         # Handle invulnerability
         if self.invulnerable:
-            if pygame.time.get_ticks() - self.invulnerable_timer > 3000:
+            if pygame.time.get_ticks() - self.invulnerable_timer > self.current_invulnerability_window:
                 self.invulnerable = False
         
-        # Handle hidden state (after death)
+        # Handle hidden state (after death) - Player Respawn
         if self.hidden and pygame.time.get_ticks() - self.hide_timer > 1000:
             self.hidden = False
             self.rect.center = (WIDTH // 2, HEIGHT // 2)
@@ -150,6 +184,12 @@ class Sheera(pygame.sprite.Sprite):
             self.velocity = pygame.math.Vector2(0, 0)
             self.invulnerable = True
             self.invulnerable_timer = pygame.time.get_ticks()
+            self.current_invulnerability_window = 3000 # Standard respawn invulnerability
+
+        # Handle hit flashing timer
+        if self.is_hit_flashing:
+            if pygame.time.get_ticks() - self.hit_flash_timer > self.hit_flash_duration:
+                self.is_hit_flashing = False
 
         # Get key presses
         keys = pygame.key.get_pressed()
@@ -170,16 +210,34 @@ class Sheera(pygame.sprite.Sprite):
             # Limit speed
             if self.velocity.length() > self.max_speed:
                 self.velocity.scale_to_length(self.max_speed)
+            # Play thrust sound
+            if pygame.mixer and self.game.thrust_sound and not pygame.mixer.Channel(0).get_busy():
+                pygame.mixer.Channel(0).play(self.game.thrust_sound, loops=-1)
+        else:
+            # Stop thrust sound
+            if pygame.mixer:
+                pygame.mixer.Channel(0).stop()
         
         # Shield control
-        if keys[pygame.K_s]:
+        current_shield_key_pressed = keys[pygame.K_s]
+        if current_shield_key_pressed:
             # Increase shield strength while S is held
             self.shield_strength = min(self.max_shield, self.shield_strength + self.shield_increase)
-            self.shield_active = self.shield_strength > 0
         else:
             # Decrease shield strength when S is released
             self.shield_strength = max(0, self.shield_strength - self.shield_decrease)
-            self.shield_active = self.shield_strength > 0
+        
+        self.shield_active = self.shield_strength > 0
+
+        # Shield sound effects
+        if pygame.mixer:
+            if self.shield_active and not self.prev_shield_active:
+                if self.game.shield_activate_sound:
+                    self.game.shield_activate_sound.play()
+            elif not self.shield_active and self.prev_shield_active:
+                if self.game.shield_deactivate_sound:
+                    self.game.shield_deactivate_sound.play()
+        self.prev_shield_active = self.shield_active
         
         # Apply friction
         self.velocity *= self.friction
@@ -204,7 +262,20 @@ class Sheera(pygame.sprite.Sprite):
         self.heat = max(0, self.heat - self.heat_cooldown)
         
         # Rotate ship image
-        self.image = pygame.transform.rotate(self.original_image, self.angle)
+        rotated_image = pygame.transform.rotate(self.original_image, self.angle)
+        
+        # Apply alpha effects for flashing or invulnerability
+        if self.is_hit_flashing:
+            if (pygame.time.get_ticks() // 100) % 2 == 0:  # Flash every 100ms
+                rotated_image.set_alpha(64)  # Dimmer
+            else:
+                rotated_image.set_alpha(192)  # Brighter
+        elif self.invulnerable:
+            rotated_image.set_alpha(128)  # General invulnerability alpha
+        else:
+            rotated_image.set_alpha(255) # Ensure full alpha if no effects
+
+        self.image = rotated_image
         self.rect = self.image.get_rect(center=self.rect.center)
         
         # Shield and glow effects are now handled in the Game.draw() method
@@ -215,6 +286,9 @@ class Sheera(pygame.sprite.Sprite):
             self.last_shot = now
             # Increase heat when shooting (dog barking heats up)
             self.heat = min(self.max_heat, self.heat + self.heat_increase)
+
+            if pygame.mixer and self.game.shoot_sound:
+                self.game.shoot_sound.play()
             
             # Calculate sound wave direction based on dog angle
             direction_x = -math.sin(math.radians(self.angle))
@@ -255,26 +329,50 @@ class Sheera(pygame.sprite.Sprite):
         screen.blit(glow_surf, glow_rect.topleft)
         
     def draw_shield(self):
-        # Calculate shield parameters based on strength
+        if self.shield_strength <= 0: # No need to draw if shield is off
+            return
+
         shield_percent = self.shield_strength / self.max_shield
-        shield_size = int(self.rect.width * (1.5 + shield_percent * 1.0))
-        
+        base_shield_radius = int(self.rect.width * 0.75 + (self.rect.width * 0.50 * shield_percent)) # Scale from 0.75x to 1.25x ship width
+
         # Choose color based on shield level
         color_index = min(len(self.shield_colors) - 1, int(shield_percent * len(self.shield_colors)))
-        color = self.shield_colors[color_index]
+        base_color = self.shield_colors[color_index]
+
+        # Create shield surface, ensure it's large enough for the biggest pulse
+        # Max radius will be base_shield_radius * (pulse_amplitude_max, e.g., 1.15 or 1.2)
+        # Let's make surface 2.5x base_shield_radius
+        surface_size = int(base_shield_radius * 2.5) 
+        # Ensure surface_size is at least 1 to avoid pygame.error: Surfaceissiing
+        surface_size = max(1, surface_size)
+        shield_surf = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
+        surface_center = surface_size // 2
+
+        # 1. Outer pulsating boundary (more subtle pulse, stronger alpha)
+        outer_pulse_factor = math.sin(pygame.time.get_ticks() * 0.015) * 0.05 + 0.97  # Small size pulse: 0.97 to 1.02
+        outer_radius = int(base_shield_radius * outer_pulse_factor)
+        outer_alpha = int(120 + 135 * shield_percent) # Range from 120 to 255
+        outer_alpha = max(0, min(255, outer_alpha)) # Clamp alpha
+        if outer_radius > 0: # Ensure radius is positive
+            pygame.draw.circle(shield_surf, (*base_color, outer_alpha), 
+                               (surface_center, surface_center), outer_radius, 3) # Thickness 3
+
+        # 2. Inner energy shimmer/pulse (more rapid or different visual pulse)
+        inner_pulse_factor = math.sin(pygame.time.get_ticks() * 0.05) * 0.1 + 0.85 # Size pulse: 0.85 to 0.95 of base_radius
+        inner_radius = int(base_shield_radius * inner_pulse_factor)
+        # Alpha pulse for inner shimmer
+        inner_alpha_pulse = math.sin(pygame.time.get_ticks() * 0.07) * 50 + 100 # Alpha from 50 to 150
+        inner_alpha = int(inner_alpha_pulse * shield_percent) # Modulated by shield strength
+        inner_alpha = max(0, min(255, inner_alpha)) # Clamp alpha
         
-        # Create shield surface
-        shield_surf = pygame.Surface((shield_size * 2, shield_size * 2), pygame.SRCALPHA)
+        # Optional: Inner shimmer as a slightly different color or thinner line
+        # For example, a lighter shade of the base_color
+        light_color = tuple(min(255, c + 50) for c in base_color) 
+        if inner_radius > 0: # Ensure radius is positive
+            pygame.draw.circle(shield_surf, (*light_color, inner_alpha),
+                               (surface_center, surface_center), inner_radius, 2) # Thickness 2
         
-        # Draw shield as a circle with pulsating effect
-        pulse = math.sin(pygame.time.get_ticks() * 0.01) * 0.1 + 0.9
-        for radius in range(shield_size, shield_size - 5, -1):
-            adjusted_radius = int(radius * pulse)
-            alpha = int(150 * shield_percent)
-            shield_color = (*color, alpha)
-            pygame.draw.circle(shield_surf, shield_color, (shield_size, shield_size), adjusted_radius, 2)
-        
-        # Draw the shield on the screen
+        # Blit the shield surface
         shield_rect = shield_surf.get_rect(center=self.rect.center)
         screen.blit(shield_surf, shield_rect.topleft)
     
@@ -286,15 +384,18 @@ class Sheera(pygame.sprite.Sprite):
 class Asteroid(pygame.sprite.Sprite):
     def __init__(self, size=3):
         pygame.sprite.Sprite.__init__(self)
-        self.size = size
-        # Use appropriate Tux image based on size (index 0=large, 1=medium, 2=small)
-        self.image = asteroid_images[3 - self.size]
-        # Scale image based on size
-        scale = self.size * 0.3
-        self.image = pygame.transform.scale(self.image, 
-                                           (int(self.image.get_width() * scale),
-                                            int(self.image.get_height() * scale)))
+        self.size = size # size 3=Large, 2=Medium, 1=Small
+        
+        # Assign frames based on size (index 0=L, 1=M, 2=S)
+        # Size 3 maps to index 0, Size 2 to 1, Size 1 to 2.
+        self.frames = processed_asteroid_frames[3 - self.size]
+        self.current_frame_index = 0
+        self.image = self.frames[self.current_frame_index]
+        self.original_image = self.image # For rotation
         self.rect = self.image.get_rect()
+
+        self.animation_last_update = pygame.time.get_ticks()
+        self.animation_speed = 200  # milliseconds per frame
         
         # Spawn at edge of screen
         side = random.randint(1, 4)
@@ -321,9 +422,17 @@ class Asteroid(pygame.sprite.Sprite):
         # Random rotation
         self.rotation = 0
         self.rotation_speed = random.uniform(-3, 3)
-        self.original_image = self.image
+        # self.original_image is already set to the current animation frame
     
     def update(self):
+        # Animation
+        if tux_animations_available and len(self.frames) > 1:
+            now = pygame.time.get_ticks()
+            if now - self.animation_last_update > self.animation_speed:
+                self.animation_last_update = now
+                self.current_frame_index = (self.current_frame_index + 1) % len(self.frames)
+                self.original_image = self.frames[self.current_frame_index] # Update original_image for rotation
+
         # Rotate asteroid
         self.rotation = (self.rotation + self.rotation_speed) % 360
         self.image = pygame.transform.rotate(self.original_image, self.rotation)
@@ -476,7 +585,7 @@ class Game:
         self.particles = pygame.sprite.Group()
         
         # Create player (Sheera)
-        self.player = Sheera()
+        self.player = Sheera(self) # Pass game instance to Sheera
         self.all_sprites.add(self.player)
         
         # Spawn initial asteroids
@@ -484,6 +593,68 @@ class Game:
         
         # Load font
         self.font = pygame.font.Font(None, 36)
+
+        # Load Sounds
+        if pygame.mixer:
+            self.shoot_sound = None
+            if os.path.exists(shoot_sound_file):
+                self.shoot_sound = pygame.mixer.Sound(shoot_sound_file)
+            else:
+                print(f"Warning: Sound file not found: {shoot_sound_file}. Game will run without this sound.")
+
+            self.explosion_sound = None
+            if os.path.exists(explosion_sound_file):
+                self.explosion_sound = pygame.mixer.Sound(explosion_sound_file)
+            else:
+                print(f"Warning: Sound file not found: {explosion_sound_file}. Game will run without this sound.")
+
+            self.thrust_sound = None
+            if os.path.exists(thrust_sound_file):
+                self.thrust_sound = pygame.mixer.Sound(thrust_sound_file)
+                self.thrust_sound.set_volume(0.5) # Set volume for looping thrust
+            else:
+                print(f"Warning: Sound file not found: {thrust_sound_file}. Game will run without this sound.")
+
+            self.player_hit_sound = None
+            if os.path.exists(player_hit_sound_file):
+                self.player_hit_sound = pygame.mixer.Sound(player_hit_sound_file)
+            else:
+                print(f"Warning: Sound file not found: {player_hit_sound_file}. Game will run without this sound.")
+            
+            self.shield_activate_sound = None
+            if os.path.exists(shield_activate_sound_file):
+                self.shield_activate_sound = pygame.mixer.Sound(shield_activate_sound_file)
+            else:
+                print(f"Warning: Sound file not found: {shield_activate_sound_file}. Game will run without this sound.")
+
+            self.shield_deactivate_sound = None
+            if os.path.exists(shield_deactivate_sound_file):
+                self.shield_deactivate_sound = pygame.mixer.Sound(shield_deactivate_sound_file)
+            else:
+                print(f"Warning: Sound file not found: {shield_deactivate_sound_file}. Game will run without this sound.")
+        else: # Mixer not available
+            self.shoot_sound = None
+            self.explosion_sound = None
+            self.thrust_sound = None
+            self.player_hit_sound = None
+            self.shield_activate_sound = None
+            self.shield_deactivate_sound = None
+            print("Mixer not initialized, all sounds disabled.")
+
+
+        # Starfield
+        self.Star = collections.namedtuple("Star", ["x", "y", "speed", "radius", "color"])
+        self.stars = []
+        for _ in range(150): # Generate 150 stars
+            x = random.randint(0, WIDTH)
+            y = random.randint(0, HEIGHT)
+            radius = random.choice([1, 2, 3])
+            speed = radius * 0.5
+            color_value = 50 + radius * 50
+            # Ensure color_value is within 0-255
+            color_value = max(0, min(255, color_value)) 
+            color = (color_value, color_value, color_value)
+            self.stars.append(self.Star(x, y, speed, radius, color))
     
     def spawn_asteroids(self, count):
         for _ in range(count):
@@ -517,6 +688,8 @@ class Game:
     def update(self):
         if self.paused:
             return
+        
+        self.update_stars()
             
         # Check for spacebar held down (rapid fire)
         keys = pygame.key.get_pressed()
@@ -528,7 +701,7 @@ class Game:
             
         # Update all sprites
         self.all_sprites.update()
-        
+
         # Check for shield-bullet collisions (reflect bullets)
         if self.player.shield_active:
             shield_radius = int(self.player.rect.width * (1.5 + self.player.shield_strength / self.player.max_shield))
@@ -548,6 +721,9 @@ class Game:
         for asteroid in hits:
             # Score based on asteroid size
             self.score += (4 - asteroid.size) * 100
+
+            if pygame.mixer and self.explosion_sound:
+                self.explosion_sound.play()
             
             # Create firework explosion
             explosion = Explosion(asteroid.rect.center, asteroid.size)
@@ -568,7 +744,17 @@ class Game:
             hits = pygame.sprite.spritecollide(self.player, self.asteroids, True, 
                                               pygame.sprite.collide_circle)
             for asteroid in hits:
+                # Activate hit feedback
+                self.player.is_hit_flashing = True
+                self.player.hit_flash_timer = pygame.time.get_ticks()
+                self.player.invulnerable = True
+                self.player.invulnerable_timer = pygame.time.get_ticks()
+                self.player.current_invulnerability_window = self.player.invulnerability_duration_on_hit
+
                 self.player.lives -= 1
+
+                if pygame.mixer and self.player_hit_sound:
+                    self.player_hit_sound.play()
                 
                 # Create firework explosion
                 explosion = Explosion(asteroid.rect.center, asteroid.size)
@@ -599,6 +785,10 @@ class Game:
     def draw(self):
         # Draw background
         screen.fill(BLACK)
+
+        # Draw stars
+        for star in self.stars:
+            pygame.draw.circle(screen, star.color, (star.x, int(star.y)), star.radius)
         
         # Draw sprites in layers to handle glow effects
         # First draw non-player sprites
@@ -639,6 +829,16 @@ class Game:
         
         # Update display
         pygame.display.flip()
+
+    def update_stars(self):
+        for i, star in enumerate(self.stars):
+            new_y = star.y + star.speed
+            if new_y > HEIGHT:
+                new_y = 0
+                new_x = random.randint(0, WIDTH)
+                self.stars[i] = star._replace(y=new_y, x=new_x)
+            else:
+                self.stars[i] = star._replace(y=new_y)
     
     def draw_text(self, text, x, y):
         text_surface = self.font.render(text, True, WHITE)
