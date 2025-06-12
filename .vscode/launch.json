@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Python: Sheeraroids",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/linux_asteroids.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
