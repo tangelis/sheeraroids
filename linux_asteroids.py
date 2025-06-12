@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Sheera vs Tux
-A game where Sheera uses sound waves to defend against Tux penguins.
+Sheera vs Iguanas
+A game where Sheera uses sound waves to defend against Iguanas.
 """
 import pygame
 import sys
@@ -16,7 +16,9 @@ pygame.init()
 pygame.mixer.init()
 
 # Game constants
-WIDTH, HEIGHT = 800, 600
+#WIDTH, HEIGHT = 800, 600
+
+WIDTH, HEIGHT = 1024, 768
 FPS = 60
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -26,7 +28,7 @@ BLUE = (0, 0, 255)
 
 # Create the game window
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Sheera vs Tux")
+pygame.display.set_caption("Sheera vs Iguanas")
 clock = pygame.time.Clock()
 
 # Load images
@@ -82,12 +84,18 @@ ship_img = load_image(os.path.join(assets_dir, "GS1.png"), (120, 90))  # Load Ge
 bullet_img = load_image(os.path.join(assets_dir, "bullet.png"))
 explosion_img = load_image(os.path.join(assets_dir, "explosion.png"))
 
-# Load Tux image and create different sizes
-tux_original = load_image(os.path.join(assets_dir, "tux_original.png"))
+# Load iguana image and create different sizes
+iguana_original = load_image(os.path.join(assets_dir, "iguana2.png"))
+if iguana_original.get_width() == 30:  # Default surface when image not found
+    # Create a placeholder iguana image if not found
+    iguana_surface = pygame.Surface((60, 60), pygame.SRCALPHA)
+    pygame.draw.polygon(iguana_surface, (0, 200, 0), [(10, 30), (50, 10), (50, 50)])  # Simple triangle
+    iguana_original = iguana_surface
+
 asteroid_images = [
-    pygame.transform.scale(tux_original, (60, 60)),  # Large
-    pygame.transform.scale(tux_original, (45, 45)),  # Medium
-    pygame.transform.scale(tux_original, (30, 30))   # Small
+    pygame.transform.scale(iguana_original, (90, 90)),  # Large
+    pygame.transform.scale(iguana_original, (70, 70)),  # Medium
+    pygame.transform.scale(iguana_original, (50, 50))   # Small
 ]
 
 # Load shooting sound
@@ -98,6 +106,25 @@ try:
 except:
     print("Could not load bark shoot converted.wav")
     shoot_sound = None
+
+# Motion trail class
+class MotionTrail(pygame.sprite.Sprite):
+    def __init__(self, image, position, alpha=150):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = image.copy()
+        self.image.set_alpha(alpha)
+        self.rect = self.image.get_rect()
+        self.rect.center = position
+        self.lifetime = 15  # frames
+        
+    def update(self):
+        self.lifetime -= 1
+        if self.lifetime <= 0:
+            self.kill()
+        else:
+            # Fade out
+            alpha = int((self.lifetime / 15) * 150)
+            self.image.set_alpha(alpha)
 
 # Game classes
 class Sheera(pygame.sprite.Sprite):
@@ -121,6 +148,7 @@ class Sheera(pygame.sprite.Sprite):
         self.hide_timer = pygame.time.get_ticks()
         self.invulnerable = False
         self.invulnerable_timer = 0
+        self.trail_timer = 0
         
         # Glow effect properties
         self.heat = 0
@@ -154,44 +182,55 @@ class Sheera(pygame.sprite.Sprite):
                 self.invulnerable = False
         
         # Handle hidden state (after death)
-        if self.hidden and pygame.time.get_ticks() - self.hide_timer > 1000:
+        if self.hidden and pygame.time.get_ticks() - self.hide_timer > 1000 and not game.game_over:
             self.hidden = False
             self.rect.center = (WIDTH // 2, HEIGHT // 2)
             self.position = pygame.math.Vector2(self.rect.center)
             self.velocity = pygame.math.Vector2(0, 0)
             self.invulnerable = True
             self.invulnerable_timer = pygame.time.get_ticks()
+            
+        # Create motion trail based on velocity
+        now = pygame.time.get_ticks()
+        if not self.hidden and self.velocity.length() > 1.0 and now - self.trail_timer > 50:
+            self.trail_timer = now
+            # Create a trail sprite at current position
+            trail = MotionTrail(self.image, self.position)
+            game.all_sprites.add(trail)
+            game.trails.add(trail)
 
         # Get key presses
         keys = pygame.key.get_pressed()
         
-        # Rotation
-        if keys[pygame.K_LEFT]:
-            self.angle += self.rotation_speed
-        if keys[pygame.K_RIGHT]:
-            self.angle -= self.rotation_speed
+        # Only process controls if not disabled in the game
+        if not hasattr(game, 'controls_disabled') or not game.controls_disabled:
+            # Rotation
+            if keys[pygame.K_LEFT]:
+                self.angle += self.rotation_speed
+            if keys[pygame.K_RIGHT]:
+                self.angle -= self.rotation_speed
+                
+            # Thrust
+            if keys[pygame.K_UP]:
+                # Calculate thrust vector based on 3 o'clock direction (90 degrees to the right)
+                thrust_angle = self.angle - 90
+                thrust_x = -math.sin(math.radians(thrust_angle)) * self.acceleration
+                thrust_y = -math.cos(math.radians(thrust_angle)) * self.acceleration
+                self.velocity += pygame.math.Vector2(thrust_x, thrust_y)
+                
+                # Limit speed
+                if self.velocity.length() > self.max_speed:
+                    self.velocity.scale_to_length(self.max_speed)
             
-        # Thrust
-        if keys[pygame.K_UP]:
-            # Calculate thrust vector based on 3 o'clock direction (90 degrees to the right)
-            thrust_angle = self.angle - 90
-            thrust_x = -math.sin(math.radians(thrust_angle)) * self.acceleration
-            thrust_y = -math.cos(math.radians(thrust_angle)) * self.acceleration
-            self.velocity += pygame.math.Vector2(thrust_x, thrust_y)
-            
-            # Limit speed
-            if self.velocity.length() > self.max_speed:
-                self.velocity.scale_to_length(self.max_speed)
-        
-        # Shield control
-        if keys[pygame.K_s]:
-            # Increase shield strength while S is held
-            self.shield_strength = min(self.max_shield, self.shield_strength + self.shield_increase)
-            self.shield_active = self.shield_strength > 0
-        else:
-            # Decrease shield strength when S is released
-            self.shield_strength = max(0, self.shield_strength - self.shield_decrease)
-            self.shield_active = self.shield_strength > 0
+            # Shield control
+            if keys[pygame.K_s]:
+                # Increase shield strength while S is held
+                self.shield_strength = min(self.max_shield, self.shield_strength + self.shield_increase)
+                self.shield_active = self.shield_strength > 0
+            else:
+                # Decrease shield strength when S is released
+                self.shield_strength = max(0, self.shield_strength - self.shield_decrease)
+                self.shield_active = self.shield_strength > 0
         
         # Apply friction
         self.velocity *= self.friction
@@ -308,7 +347,7 @@ class Asteroid(pygame.sprite.Sprite):
     def __init__(self, size=3):
         pygame.sprite.Sprite.__init__(self)
         self.size = size
-        # Use appropriate Tux image based on size (index 0=large, 1=medium, 2=small)
+        # Use appropriate iguana image based on size (index 0=large, 1=medium, 2=small)
         self.image = asteroid_images[3 - self.size]
         # Scale image based on size
         scale = self.size * 0.3
@@ -343,6 +382,7 @@ class Asteroid(pygame.sprite.Sprite):
         self.rotation = 0
         self.rotation_speed = random.uniform(-3, 3)
         self.original_image = self.image
+        self.trail_timer = 0
     
     def update(self):
         # Rotate asteroid
@@ -353,6 +393,15 @@ class Asteroid(pygame.sprite.Sprite):
         # Update position
         self.position += self.velocity
         self.rect.center = self.position
+        
+        # Create motion trail based on velocity
+        now = pygame.time.get_ticks()
+        if self.velocity.length() > 2.0 and now - self.trail_timer > 100:
+            self.trail_timer = now
+            # Create a trail sprite at current position with lower alpha
+            trail = MotionTrail(self.image, self.position, alpha=80)
+            game.all_sprites.add(trail)
+            game.trails.add(trail)
         
         # Wrap around screen
         if self.position.x < -self.rect.width:
@@ -385,6 +434,7 @@ class SoundWave(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=self.rect.center)
         self.pulse_timer = 0
         self.pulse_rate = 100  # milliseconds
+        self.trail_timer = 0
     
     def update(self):
         # Update position
@@ -406,6 +456,14 @@ class SoundWave(pygame.sprite.Sprite):
             # Maintain rotation
             self.image = pygame.transform.rotate(self.image, self.angle)
             self.rect = self.image.get_rect(center=self.position)
+            
+        # Create motion trail for sound waves
+        if now - self.trail_timer > 30:  # More frequent trails for bullets
+            self.trail_timer = now
+            trail = MotionTrail(self.image, self.position, alpha=100)
+            trail.lifetime = 8  # Shorter lifetime for bullet trails
+            game.all_sprites.add(trail)
+            game.trails.add(trail)
         
         # Check if sound wave is off screen or expired
         if (now - self.spawn_time > self.lifetime or
@@ -488,6 +546,8 @@ class Game:
         self.level = 1
         self.game_over = False
         self.paused = False
+        self.controls_disabled = False
+        self.explosion_created = False
         
         # Create sprite groups
         self.all_sprites = pygame.sprite.Group()
@@ -495,6 +555,7 @@ class Game:
         self.bullets = pygame.sprite.Group()
         self.explosions = pygame.sprite.Group()
         self.particles = pygame.sprite.Group()
+        self.trails = pygame.sprite.Group()  # New group for motion trails
         
         # Create player (Sheera)
         self.player = Sheera()
@@ -525,14 +586,14 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
-                if event.key == pygame.K_SPACE:
+                if event.key == pygame.K_SPACE and not self.controls_disabled:
                     bullet = self.player.shoot()
                     if bullet:
                         self.bullets.add(bullet)
                         self.all_sprites.add(bullet)
                         if shoot_sound:
                             shoot_sound.play()
-                if event.key == pygame.K_p:
+                if event.key == pygame.K_p and not self.controls_disabled:
                     self.paused = not self.paused
                 if event.key == pygame.K_RETURN and self.game_over:
                     # Reset the game
@@ -543,15 +604,28 @@ class Game:
     def update(self):
         if self.paused:
             return
+        
+        # If game is over but explosion hasn't been created yet, create it
+        if self.game_over and not self.explosion_created:
+            # Create a large explosion at the player's position
+            explosion = Explosion(self.player.rect.center, 4)  # Size 4 for a big explosion
+            self.explosions.add(explosion)
+            self.all_sprites.add(explosion)
+            explosion.create_particles(self)
+            self.explosion_created = True
+            self.controls_disabled = True
+            # Hide the player sprite
+            self.player.hidden = True
             
-        # Check for spacebar held down (rapid fire)
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_SPACE]:
-            bullet = self.player.shoot()
-            if bullet:
-                self.bullets.add(bullet)
-                self.all_sprites.add(bullet)
-                shoot_sound.play()
+        # Check for spacebar held down (rapid fire) - only if controls aren't disabled
+        if not self.controls_disabled:
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_SPACE]:
+                bullet = self.player.shoot()
+                if bullet:
+                    self.bullets.add(bullet)
+                    self.all_sprites.add(bullet)
+                    shoot_sound.play()
             
         # Update all sprites
         self.all_sprites.update()
@@ -628,9 +702,13 @@ class Game:
         screen.fill(BLACK)
         
         # Draw sprites in layers to handle glow effects
-        # First draw non-player sprites
+        # First draw trails
+        for sprite in self.trails:
+            screen.blit(sprite.image, sprite.rect)
+            
+        # Then draw other non-player sprites
         for sprite in self.all_sprites:
-            if sprite != self.player:
+            if sprite != self.player and sprite not in self.trails:
                 screen.blit(sprite.image, sprite.rect)
         
         # Draw player with shield or glow
@@ -689,8 +767,12 @@ class Game:
             self.all_sprites.add(particle)
             self.particles.add(particle)
 
+# Create a global game instance that can be accessed by other classes
+game = None
+
 # Main game loop
 def main():
+    global game
     game = Game()
     running = True
     
