@@ -8,10 +8,12 @@ import sys
 import math
 import random
 import os
+import numpy as np
 from pygame.locals import *
 
 # Initialize pygame
 pygame.init()
+pygame.mixer.init()
 
 # Game constants
 WIDTH, HEIGHT = 800, 600
@@ -76,7 +78,7 @@ create_soundwave_placeholder()
 create_placeholder_image("explosion.png", RED, (50, 50))
 
 # Load game assets
-ship_img = load_image(os.path.join(assets_dir, "sheera.jpg"), (120, 90))  # Load Sheera image at twice the size
+ship_img = load_image(os.path.join(assets_dir, "GS1.png"), (120, 90))  # Load German Shepherd head
 bullet_img = load_image(os.path.join(assets_dir, "bullet.png"))
 explosion_img = load_image(os.path.join(assets_dir, "explosion.png"))
 
@@ -87,6 +89,15 @@ asteroid_images = [
     pygame.transform.scale(tux_original, (45, 45)),  # Medium
     pygame.transform.scale(tux_original, (30, 30))   # Small
 ]
+
+# Load shooting sound
+try:
+    # Load the converted wav bark sound file
+    shoot_sound = pygame.mixer.Sound(os.path.join(assets_dir, "bark_shoot_converted.wav"))
+    shoot_sound.set_volume(0.5)  # Adjust volume to not be too loud
+except:
+    print("Could not load bark shoot converted.wav")
+    shoot_sound = None
 
 # Game classes
 class Sheera(pygame.sprite.Sprite):
@@ -162,9 +173,10 @@ class Sheera(pygame.sprite.Sprite):
             
         # Thrust
         if keys[pygame.K_UP]:
-            # Calculate thrust vector based on angle
-            thrust_x = -math.sin(math.radians(self.angle)) * self.acceleration
-            thrust_y = -math.cos(math.radians(self.angle)) * self.acceleration
+            # Calculate thrust vector based on 3 o'clock direction (90 degrees to the right)
+            thrust_angle = self.angle - 90
+            thrust_x = -math.sin(math.radians(thrust_angle)) * self.acceleration
+            thrust_y = -math.cos(math.radians(thrust_angle)) * self.acceleration
             self.velocity += pygame.math.Vector2(thrust_x, thrust_y)
             
             # Limit speed
@@ -216,14 +228,23 @@ class Sheera(pygame.sprite.Sprite):
             # Increase heat when shooting (dog barking heats up)
             self.heat = min(self.max_heat, self.heat + self.heat_increase)
             
-            # Calculate sound wave direction based on dog angle
-            direction_x = -math.sin(math.radians(self.angle))
-            direction_y = -math.cos(math.radians(self.angle))
-            # Position sound wave at the front of the dog (mouth)
-            pos_x = self.position.x + direction_x * self.rect.width / 2
-            pos_y = self.position.y + direction_y * self.rect.height / 2
+            # Calculate position and direction at 3 o'clock (right side)
+            # This is 90 degrees to the right of the current angle
+            right_angle = self.angle - 90
             
-            # Create a sound wave bullet
+            # Calculate shooting direction (3 o'clock direction)
+            direction_x = -math.sin(math.radians(right_angle))
+            direction_y = -math.cos(math.radians(right_angle))
+            
+            # Calculate spawn position at the right side of the head
+            offset_x = direction_x * (self.rect.width * 0.5)
+            offset_y = direction_y * (self.rect.height * 0.5)
+            
+            # Position sound wave at the right side of the German Shepherd head
+            pos_x = self.position.x + offset_x
+            pos_y = self.position.y + offset_y
+            
+            # Create a sound wave bullet shooting to the right
             return SoundWave(pos_x, pos_y, direction_x, direction_y)
         return None
         
@@ -509,8 +530,13 @@ class Game:
                     if bullet:
                         self.bullets.add(bullet)
                         self.all_sprites.add(bullet)
+                        if shoot_sound:
+                            shoot_sound.play()
                 if event.key == pygame.K_p:
                     self.paused = not self.paused
+                if event.key == pygame.K_RETURN and self.game_over:
+                    # Reset the game
+                    self.__init__()
             
         return True
     
@@ -525,6 +551,7 @@ class Game:
             if bullet:
                 self.bullets.add(bullet)
                 self.all_sprites.add(bullet)
+                shoot_sound.play()
             
         # Update all sprites
         self.all_sprites.update()
@@ -632,6 +659,7 @@ class Game:
             self.draw_text("GAME OVER", WIDTH // 2 - 100, HEIGHT // 2 - 30)
             self.draw_text(f"Final Score: {self.score}", WIDTH // 2 - 100, HEIGHT // 2 + 10)
             self.draw_text("Press ESC to exit", WIDTH // 2 - 100, HEIGHT // 2 + 50)
+            self.draw_text("Press ENTER to start over", WIDTH // 2 - 125, HEIGHT // 2 + 90)
         
         if self.paused:
             self.draw_text("PAUSED", WIDTH // 2 - 50, HEIGHT // 2)
