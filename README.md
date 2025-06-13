@@ -2,7 +2,8 @@
 
 ## The Epic Battle of Bark vs Lizard!
 
-![Game Screenshot](assets/SHEERAROIDS.png)
+https://github.com/user-attachments/assets/00788496-fc11-4803-9ad3-8ff6b046015c
+
 
 ## 🎮 What is this madness?
 
