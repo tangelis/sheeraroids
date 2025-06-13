@@ -1,72 +1,53 @@
-# 🐕 SHEERA vs TUX 🐧
+# Sheeraroids
 
-## The Epic Battle of Sound vs Linux!
+A game where Sheera uses sound waves to defend against Iguanas.
 
-![Game Screenshot](assets/SHEERAROIDS.png)
+## Controls
 
-## 🎮 What is this madness?
+- Arrow keys: Move and rotate
+- Space: Shoot sound waves
+- S: Activate shield
+- P: Pause game
+- M: Toggle background music (internet radio stream)
+- ESC: Exit game
+- ENTER: Restart game (when game over)
 
-Ever wondered what would happen if a sound-blasting dog named Sheera took on an army of Linux mascots? No? Well, now you can find out anyway!
+## Building Executables
 
-**Sheera vs Tux** is a ridiculous twist on the classic Asteroids game where you control Sheera, a powerful canine with the ability to emit devastating sound waves. Your mission: defend the universe from an invasion of Tux penguins that are mysteriously multiplying!
+### Windows
 
-## 🚀 Features
+1. Make sure you have Python installed
+2. Run `build_windows.bat`
+3. Find the executable in the `dist` folder
 
-- 🐕 Control Sheera, the sound-blasting superdog
-- 🔊 Shoot powerful sound waves by barking (spacebar)
-- 🛡️ Activate shields by holding S
-- 🎆 Enjoy colorful firework explosions when Tux penguins are defeated
-- 🔥 Watch as Sheera heats up with rapid-fire barking
-- 🐧 Battle against the ever-splitting Tux penguin army
+### macOS
 
-## 🎯 How to Play
+1. Make sure you have Python installed
+2. Run `chmod +x build_macos.sh` to make the script executable
+3. Run `./build_macos.sh`
+4. Find the application in the `dist` folder
 
-1. **Move**: Arrow keys (↑ ← →)
-2. **Bark**: Spacebar (hold for rapid fire)
-3. **Shield**: Hold S
-4. **Pause**: P
-5. **Quit**: ESC
+### Manual Build
 
+You can also build manually using PyInstaller:
 
-
-## 🛠️ Installation
-
-```bash
-# Clone this repository
-git clone https://github.com/tangelis/sheeraroids.git
-
-# Navigate to the game directory
-cd sheeraroids
-
-# Install dependencies
-pip install pygame
-
-# Run the game
-python linux_asteroids.py
+```
+pip install -r requirements.txt
+pyinstaller sheeraroids.spec
 ```
 
-## 🤔 Why does this exist?
+## Features
 
-Why not? Sometimes the best ideas come from the most random combinations. Sheera needed a worthy opponent, and Tux volunteered as tribute.
+- Asteroid-style gameplay with Sheera vs Iguanas theme
+- Sound wave shooting mechanics
+- Shield system
+- Heat management for rapid firing
+- Background music streaming from internet radio
+- Particle effects and explosions
+- Progressive difficulty
 
-## 🧠 Pro Tips
+## Dependencies
 
-- Shields reflect sound waves - use this to your advantage!
-- The more you bark, the hotter Sheera gets (literally)
-- Tux penguins split into smaller versions when hit - prioritize the small ones!
-
-## 🙏 Credits
-
-- Sheera: For being a good gurrrll
-- Tux: For being a good sport about being the villain
-- Pygame: For making this absurdity possible
-- Delores the FLorist
-- Mosey the Paddler
-
-## 📜 License
-
-This game is released under the "Please Don't Sue Me For Making Tux The Bad Guy" License.
-
----
-
-*"In the battle between sound and Linux, there are no losers... except maybe your free time."*
+- pygame
+- numpy
+- requests (for internet radio streaming)

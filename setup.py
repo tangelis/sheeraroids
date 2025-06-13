@@ -1,22 +1,30 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
-    name="sheera-vs-tux",
+    name="sheeraroids",
     version="1.0.0",
-    description="A game where Sheera uses sound waves to defend against Tux penguins",
-    author="Sheera Fan",
-    author_email="sheera@example.com",
-    url="https://github.com/yourusername/sheera-vs-tux",
-    py_modules=["linux_asteroids"],
+    packages=find_packages(),
+    include_package_data=True,
     install_requires=[
         "pygame>=2.1.0",
+        "numpy>=1.20.0",
+        "requests>=2.25.0",
     ],
+    entry_points={
+        "console_scripts": [
+            "sheeraroids=linux_asteroids:main",
+        ],
+    },
+    python_requires=">=3.6",
+    author="Sheeraroids Team",
+    description="A game where Sheera uses sound waves to defend against Iguanas",
+    keywords="game, pygame, asteroids",
     classifiers=[
-        "Development Status :: 5 - Production/Stable",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: End Users/Desktop",
         "Topic :: Games/Entertainment :: Arcade",
-        "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
     ],
-    python_requires=">=3.6",
 )

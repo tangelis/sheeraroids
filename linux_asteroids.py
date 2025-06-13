@@ -9,7 +9,10 @@ import math
 import random
 import os
 import numpy as np
+import json
 from pygame.locals import *
+from disintegration_effect import DisintegrationEffect
+from intro_animation import IntroAnimation
 
 # Initialize pygame
 pygame.init()
@@ -79,6 +82,10 @@ def create_soundwave_placeholder():
 create_soundwave_placeholder()
 create_placeholder_image("explosion.png", RED, (50, 50))
 
+# Create title image if needed
+from assets.title_text import create_title_image
+create_title_image(assets_dir, WIDTH, int(HEIGHT * 0.3))
+
 # Load game assets
 ship_img = load_image(os.path.join(assets_dir, "GS1.png"), (120, 90))  # Load German Shepherd head
 bullet_img = load_image(os.path.join(assets_dir, "bullet.png"))
@@ -142,10 +149,15 @@ class Sheera(pygame.sprite.Sprite):
         self.max_speed = 7
         self.friction = 0.98
         self.shoot_delay = 250  # Bark delay
+        self.min_shoot_delay = 100  # Minimum delay between shots when fully charged
+        self.fire_rate_boost = 0  # Increases as fire button is held
+        self.max_fire_rate_boost = 150  # Maximum reduction in shoot delay
         self.last_shot = pygame.time.get_ticks()
+        self.fire_button_held_time = 0  # Time fire button has been held
         self.lives = 3
         self.hidden = False
         self.hide_timer = pygame.time.get_ticks()
+        self.respawn_delay = 3000  # 3 seconds respawn delay
         self.invulnerable = False
         self.invulnerable_timer = 0
         self.trail_timer = 0
@@ -182,7 +194,7 @@ class Sheera(pygame.sprite.Sprite):
                 self.invulnerable = False
         
         # Handle hidden state (after death)
-        if self.hidden and pygame.time.get_ticks() - self.hide_timer > 1000 and not game.game_over:
+        if self.hidden and pygame.time.get_ticks() - self.hide_timer > self.respawn_delay and not game.game_over:
             self.hidden = False
             self.rect.center = (WIDTH // 2, HEIGHT // 2)
             self.position = pygame.math.Vector2(self.rect.center)
@@ -198,6 +210,16 @@ class Sheera(pygame.sprite.Sprite):
             trail = MotionTrail(self.image, self.position)
             game.all_sprites.add(trail)
             game.trails.add(trail)
+            
+        # Update fire rate boost based on space key
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_SPACE]:
+            # Increase fire rate boost while space is held
+            self.fire_rate_boost = min(self.max_fire_rate_boost, 
+                                      self.fire_rate_boost + 0.5)
+        else:
+            # Reset fire rate boost when space is released
+            self.fire_rate_boost = 0
 
         # Get key presses
         keys = pygame.key.get_pressed()
@@ -262,7 +284,10 @@ class Sheera(pygame.sprite.Sprite):
     
     def shoot(self):
         now = pygame.time.get_ticks()
-        if now - self.last_shot > self.shoot_delay and not self.hidden:
+        # Calculate current shoot delay based on fire rate boost
+        current_delay = max(self.min_shoot_delay, self.shoot_delay - self.fire_rate_boost)
+        
+        if now - self.last_shot > current_delay and not self.hidden:
             self.last_shot = now
             # Increase heat when shooting (dog barking heats up)
             self.heat = min(self.max_heat, self.heat + self.heat_increase)
@@ -342,18 +367,59 @@ class Sheera(pygame.sprite.Sprite):
         self.hidden = True
         self.hide_timer = pygame.time.get_ticks()
         self.rect.center = (WIDTH + 200, HEIGHT + 200)  # Move off screen
+        # Set respawn time to 3 seconds
+        self.respawn_delay = 3000
 
 class Asteroid(pygame.sprite.Sprite):
-    def __init__(self, size=3):
+    def __init__(self, size=3, level_modifier=1.0, color_shift=0):
         pygame.sprite.Sprite.__init__(self)
         self.size = size
         # Use appropriate iguana image based on size (index 0=large, 1=medium, 2=small)
         self.image = asteroid_images[3 - self.size]
-        # Scale image based on size
-        scale = self.size * 0.3
+        # Scale image based on size and level modifier
+        scale = self.size * 0.3 * level_modifier
         self.image = pygame.transform.scale(self.image, 
                                            (int(self.image.get_width() * scale),
                                             int(self.image.get_height() * scale)))
+        
+        # Apply color shift based on level
+        if color_shift > 0:
+            # Create a copy to avoid modifying the original
+            self.image = self.image.copy()
+            # Create a color overlay surface
+            overlay = pygame.Surface(self.image.get_size(), pygame.SRCALPHA)
+            
+            # Generate a color based on level
+            hue = (color_shift * 30) % 360  # Shift hue by 30 degrees per level
+            # Convert HSV to RGB (hue: 0-360, saturation: 0-100, value: 0-100)
+            h = hue / 360
+            s = 0.7  # 70% saturation
+            v = 0.9  # 90% value
+            
+            # HSV to RGB conversion
+            i = int(h * 6)
+            f = h * 6 - i
+            p = v * (1 - s)
+            q = v * (1 - f * s)
+            t = v * (1 - (1 - f) * s)
+            
+            if i % 6 == 0:
+                r, g, b = v, t, p
+            elif i % 6 == 1:
+                r, g, b = q, v, p
+            elif i % 6 == 2:
+                r, g, b = p, v, t
+            elif i % 6 == 3:
+                r, g, b = p, q, v
+            elif i % 6 == 4:
+                r, g, b = t, p, v
+            else:
+                r, g, b = v, p, q
+                
+            color = (int(r * 255), int(g * 255), int(b * 255), 100)
+            overlay.fill(color)
+            self.image.blit(overlay, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            
         self.rect = self.image.get_rect()
         
         # Spawn at edge of screen
@@ -415,7 +481,15 @@ class Asteroid(pygame.sprite.Sprite):
 
     def split(self):
         if self.size > 1:
-            return [Asteroid(self.size - 1) for _ in range(2)]
+            # Get the current level from the game instance
+            level_modifier = 1.0
+            color_shift = 0
+            if game:
+                level_modifier = 1.0 + (game.level - 1) * 0.5
+                color_shift = game.level - 1
+            
+            # Create smaller asteroids with the same level modifiers
+            return [Asteroid(self.size - 1, level_modifier, color_shift) for _ in range(2)]
         return []
 
 class SoundWave(pygame.sprite.Sprite):
@@ -472,30 +546,69 @@ class SoundWave(pygame.sprite.Sprite):
             self.kill()
 
 class FireworkParticle(pygame.sprite.Sprite):
-    def __init__(self, pos, velocity, color):
+    def __init__(self, pos, velocity, color, size=3, lifetime_range=(30, 60), particle_type="normal"):
         pygame.sprite.Sprite.__init__(self)
-        self.size = 3
+        self.size = size
         self.image = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, color, (self.size//2, self.size//2), self.size//2)
+        self.particle_type = particle_type
+        
+        if particle_type == "smoke":
+            # Smoke particles are gray/white with blur effect
+            gray_value = random.randint(180, 230)
+            self.color = (gray_value, gray_value, gray_value)
+            # Smoke particles are larger and more transparent
+            pygame.draw.circle(self.image, self.color, (self.size//2, self.size//2), self.size//2)
+            self.alpha = 150
+        else:
+            # Normal firework particles
+            self.color = color
+            pygame.draw.circle(self.image, color, (self.size//2, self.size//2), self.size//2)
+            self.alpha = 255
+            
         self.rect = self.image.get_rect()
         self.rect.center = pos
         self.position = pygame.math.Vector2(pos)
         self.velocity = velocity
-        self.gravity = pygame.math.Vector2(0, 0.05)
-        self.lifetime = random.randint(30, 60)  # frames
-        self.alpha = 255
-        self.fade_rate = 255 / self.lifetime
+        self.gravity = pygame.math.Vector2(0, 0.05) if particle_type != "smoke" else pygame.math.Vector2(0, -0.02)
+        self.lifetime = random.randint(lifetime_range[0], lifetime_range[1])  # frames
+        self.fade_rate = self.alpha / self.lifetime
+        self.original_size = size
+        self.grow_rate = 0.05 if particle_type == "smoke" else 0
         
     def update(self):
         self.velocity += self.gravity
         self.position += self.velocity
         self.rect.center = self.position
         self.lifetime -= 1
+        
         if self.lifetime <= 0:
             self.kill()
         else:
             self.alpha = max(0, self.alpha - self.fade_rate)
-            self.image.set_alpha(int(self.alpha))
+            
+            if self.particle_type == "smoke":
+                # Smoke particles grow over time
+                self.size += self.grow_rate
+                new_size = int(self.original_size + self.size)
+                self.image = pygame.Surface((new_size, new_size), pygame.SRCALPHA)
+                pygame.draw.circle(self.image, self.color, (new_size//2, new_size//2), new_size//2)
+                self.image.set_alpha(int(self.alpha))
+                self.rect = self.image.get_rect(center=self.rect.center)
+                
+                # Add some random drift to smoke
+                self.velocity.x += random.uniform(-0.1, 0.1)
+            else:
+                # Add sparkle effect to normal particles
+                if random.random() < 0.1:  # 10% chance each frame
+                    # Temporarily increase brightness
+                    bright_color = tuple(min(255, c + 50) for c in self.color[:3])
+                    bright_surface = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+                    pygame.draw.circle(bright_surface, bright_color, (self.size//2, self.size//2), self.size//2)
+                    bright_surface.set_alpha(int(self.alpha))
+                    self.image = bright_surface
+                else:
+                    # Normal appearance
+                    self.image.set_alpha(int(self.alpha))
 
 class Explosion(pygame.sprite.Sprite):
     def __init__(self, center, size):
@@ -519,16 +632,38 @@ class Explosion(pygame.sprite.Sprite):
         self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
         self.rect = self.image.get_rect(center=center)
         
-    def create_particles(self, game):
+    def create_particles(self, game, particle_count=None, special_colors=False):
         # Create firework particles
-        num_particles = self.size * 15
+        num_particles = particle_count if particle_count else self.size * 15
+        
+        # Special colors for player explosion
+        special_color_list = [
+            (255, 0, 0),    # Red
+            (255, 165, 0),  # Orange
+            (255, 255, 0),  # Yellow
+            (0, 255, 0),    # Green
+            (0, 0, 255),    # Blue
+            (75, 0, 130),   # Indigo
+            (148, 0, 211),  # Violet
+            (255, 192, 203), # Pink
+            (255, 255, 255), # White
+            (255, 215, 0)    # Gold
+        ]
+        
         for _ in range(num_particles):
             # Random direction
             angle = random.uniform(0, 2 * math.pi)
             speed = random.uniform(1, 3 + self.size)
             velocity = pygame.math.Vector2(math.cos(angle) * speed, math.sin(angle) * speed)
-            color = random.choice(self.colors)
-            particle = FireworkParticle(self.center, velocity, color)
+            
+            if special_colors:
+                color = random.choice(special_color_list)
+                # Create larger, longer-lasting particles for player explosion
+                particle = FireworkParticle(self.center, velocity, color, size=4, lifetime_range=(45, 90))
+            else:
+                color = random.choice(self.colors)
+                particle = FireworkParticle(self.center, velocity, color)
+                
             game.all_sprites.add(particle)
             self.particles.append(particle)
         
@@ -548,6 +683,13 @@ class Game:
         self.paused = False
         self.controls_disabled = False
         self.explosion_created = False
+        self.entering_initials = False
+        self.current_initials = ""
+        self.initials_cursor = 0
+        self.disintegration_effect = None
+        self.level_timer = pygame.time.get_ticks()
+        self.level_duration = 10000  # 10 seconds per level
+        self.show_intro = False  # Flag to show intro again from game over
         
         # Create sprite groups
         self.all_sprites = pygame.sprite.Group()
@@ -561,6 +703,19 @@ class Game:
         self.player = Sheera()
         self.all_sprites.add(self.player)
         
+        # Initialize audio streamer for background music
+        try:
+            from audio_streamer import AudioStreamer
+            self.audio_streamer = AudioStreamer()
+        except ImportError:
+            print("AudioStreamer module not available")
+            self.audio_streamer = None
+            
+        # Initialize high score manager
+        from highscores import HighScoreManager
+        self.high_score_manager = HighScoreManager()
+        self.show_high_scores = False
+        
         # Spawn initial asteroids
         self.spawn_asteroids(self.level + 2)
         
@@ -568,8 +723,18 @@ class Game:
         self.font = pygame.font.Font(None, 36)
     
     def spawn_asteroids(self, count):
-        for _ in range(count):
-            asteroid = Asteroid(3)  # Start with large asteroids
+        # Calculate level-based modifiers
+        level_size_modifier = 1.0 + (self.level - 1) * 0.5  # 50% size increase per level
+        
+        # Double the count for each level beyond the first
+        adjusted_count = count * (2 ** (self.level - 1))
+        
+        # Cap the maximum number of asteroids to prevent overwhelming the player
+        max_asteroids = 30
+        adjusted_count = min(adjusted_count, max_asteroids)
+        
+        for _ in range(adjusted_count):
+            asteroid = Asteroid(3, level_size_modifier, self.level - 1)  # Start with large asteroids
             # Make sure asteroids don't spawn too close to the player
             while (asteroid.position - self.player.position).length() < 150:
                 asteroid.position = pygame.math.Vector2(
@@ -584,6 +749,16 @@ class Game:
             if event.type == pygame.QUIT:
                 return False
             elif event.type == pygame.KEYDOWN:
+                # Handle initials input
+                if self.game_over and self.entering_initials:
+                    if event.key == pygame.K_BACKSPACE:
+                        if len(self.current_initials) > 0:
+                            self.current_initials = self.current_initials[:-1]
+                    elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                        pass  # Handled elsewhere
+                    elif len(self.current_initials) < 3:
+                        if event.unicode.isalpha():
+                            self.current_initials += event.unicode.upper()
                 if event.key == pygame.K_ESCAPE:
                     return False
                 if event.key == pygame.K_SPACE and not self.controls_disabled:
@@ -595,9 +770,33 @@ class Game:
                             shoot_sound.play()
                 if event.key == pygame.K_p and not self.controls_disabled:
                     self.paused = not self.paused
+                if event.key == pygame.K_m and hasattr(self, 'audio_streamer') and self.audio_streamer:
+                    # Toggle music streaming
+                    if self.audio_streamer.is_playing:
+                        self.audio_streamer.stop_streaming()
+                        print("Background music stopped")
+                    else:
+                        self.audio_streamer.start_streaming()
+                        print("Background music started")
                 if event.key == pygame.K_RETURN and self.game_over:
-                    # Reset the game
-                    self.__init__()
+                    if self.entering_initials:
+                        # Save high score and show high score table
+                        if len(self.current_initials) > 0:
+                            self.high_score_manager.add_score(
+                                self.current_initials.ljust(3, 'A'), 
+                                self.score, 
+                                self.level
+                            )
+                        self.entering_initials = False
+                        self.show_high_scores = True
+                    elif self.show_high_scores:
+                        # Show intro again before starting new game
+                        self.show_intro = True
+                        return False
+                    else:
+                        # Show intro again before starting new game
+                        self.show_intro = True
+                        return False
             
         return True
     
@@ -605,13 +804,51 @@ class Game:
         if self.paused:
             return
         
+        # Check if it's time to increase the level
+        current_time = pygame.time.get_ticks()
+        if not self.game_over and current_time - self.level_timer > self.level_duration:
+            self.level += 1
+            self.level_timer = current_time
+            
+            # Spawn new asteroids for the new level
+            self.spawn_asteroids(self.level + 2)
+            
+            # Display level up message
+            print(f"Level up! Now at level {self.level}")
+        
+        # Update disintegration effect if active
+        if self.disintegration_effect and not self.disintegration_effect.is_complete():
+            self.disintegration_effect.update()
+        
         # If game is over but explosion hasn't been created yet, create it
         if self.game_over and not self.explosion_created:
             # Create a large explosion at the player's position
             explosion = Explosion(self.player.rect.center, 4)  # Size 4 for a big explosion
             self.explosions.add(explosion)
             self.all_sprites.add(explosion)
-            explosion.create_particles(self)
+            explosion.create_particles(self, particle_count=50, special_colors=True)
+            
+            # Create multiple smaller explosions around the player for dramatic effect
+            for _ in range(5):
+                offset = pygame.math.Vector2(random.uniform(-30, 30), random.uniform(-30, 30))
+                pos = self.player.rect.center + offset
+                small_explosion = Explosion(pos, 2)
+                self.explosions.add(small_explosion)
+                self.all_sprites.add(small_explosion)
+                small_explosion.create_particles(self, particle_count=15, special_colors=True)
+            
+            # Create smoke particles from the player sprite
+            for _ in range(30):
+                pos = pygame.math.Vector2(self.player.rect.center)
+                # Add slight offset for more natural look
+                pos += pygame.math.Vector2(random.uniform(-20, 20), random.uniform(-20, 20))
+                # Smoke particles move upward and outward
+                vel = pygame.math.Vector2(random.uniform(-0.5, 0.5), random.uniform(-1.5, -0.5))
+                # Create gray smoke particles with longer lifetime
+                smoke = FireworkParticle(pos, vel, (200, 200, 200), size=5, lifetime_range=(60, 120), particle_type="smoke")
+                self.all_sprites.add(smoke)
+                self.particles.add(smoke)
+                
             self.explosion_created = True
             self.controls_disabled = True
             # Hide the player sprite
@@ -671,11 +908,29 @@ class Game:
             for asteroid in hits:
                 self.player.lives -= 1
                 
-                # Create firework explosion
+                # Create firework explosion at asteroid position
                 explosion = Explosion(asteroid.rect.center, asteroid.size)
                 self.explosions.add(explosion)
                 self.all_sprites.add(explosion)
                 explosion.create_particles(self)
+                
+                # Create colorful explosion at player position
+                player_explosion = Explosion(self.player.rect.center, 3)
+                self.explosions.add(player_explosion)
+                self.all_sprites.add(player_explosion)
+                player_explosion.create_particles(self, particle_count=30, special_colors=True)
+                
+                # Add smoke effect when player is hit
+                for _ in range(15):
+                    pos = pygame.math.Vector2(self.player.rect.center)
+                    # Add slight offset
+                    pos += pygame.math.Vector2(random.uniform(-10, 10), random.uniform(-10, 10))
+                    # Smoke particles move upward
+                    vel = pygame.math.Vector2(random.uniform(-0.3, 0.3), random.uniform(-1.0, -0.2))
+                    # Create gray smoke particles
+                    smoke = FireworkParticle(pos, vel, (180, 180, 180), size=4, lifetime_range=(30, 60), particle_type="smoke")
+                    self.all_sprites.add(smoke)
+                    self.particles.add(smoke)
                 
                 # Split asteroid
                 new_asteroids = asteroid.split()
@@ -688,6 +943,16 @@ class Game:
                 if self.player.lives <= 0:
                     # Game over
                     self.game_over = True
+                    # Create disintegration effect from player sprite
+                    self.disintegration_effect = DisintegrationEffect(
+                        self.player.image, 
+                        self.player.rect.center,
+                        particle_count=150
+                    )
+                    # Check if this is a high score
+                    if self.high_score_manager.is_high_score(self.score):
+                        self.entering_initials = True
+                        self.current_initials = ""
                 else:
                     # Hide player temporarily
                     self.player.hide()
@@ -711,12 +976,25 @@ class Game:
             if sprite != self.player and sprite not in self.trails:
                 screen.blit(sprite.image, sprite.rect)
         
-        # Draw player with shield or glow
-        if self.player.shield_active:
-            self.player.draw_shield()
-        elif self.player.heat > 0:
-            self.player.draw_glow()
-        screen.blit(self.player.image, self.player.rect)
+        # Draw disintegration effect if active
+        if self.disintegration_effect and not self.disintegration_effect.is_complete():
+            self.disintegration_effect.draw(screen)
+            # Don't draw the player if disintegrating
+        elif not self.game_over and not self.player.hidden:
+            # Draw player with shield or glow
+            if self.player.shield_active:
+                self.player.draw_shield()
+            elif self.player.heat > 0:
+                self.player.draw_glow()
+            screen.blit(self.player.image, self.player.rect)
+            
+        # Draw level up notification
+        time_since_level = pygame.time.get_ticks() - self.level_timer
+        if time_since_level < 2000:  # Show for 2 seconds
+            # Flash the text
+            if (time_since_level // 200) % 2 == 0:  # Flash every 200ms
+                level_text = f"LEVEL {self.level}"
+                self.draw_text(level_text, WIDTH // 2 - 60, HEIGHT // 2 - 100, size=48, color=(255, 255, 0))
         
         # Draw HUD
         self.draw_text(f"Score: {self.score}", 10, 10)
@@ -732,12 +1010,41 @@ class Game:
         shield_percent = int((self.player.shield_strength / self.player.max_shield) * 100)
         if shield_percent > 0:
             self.draw_text(f"Shield: {shield_percent}%", WIDTH - 100, 90)
+            
+        # Show fire rate boost
+        fire_boost_percent = int((self.player.fire_rate_boost / self.player.max_fire_rate_boost) * 100)
+        if fire_boost_percent > 0:
+            boost_color = (255, 255 - fire_boost_percent * 2, 0)  # Yellow to red
+            self.draw_text(f"Fire Rate: +{fire_boost_percent}%", WIDTH - 150, 130, color=boost_color)
         
         if self.game_over:
-            self.draw_text("GAME OVER", WIDTH // 2 - 100, HEIGHT // 2 - 30)
-            self.draw_text(f"Final Score: {self.score}", WIDTH // 2 - 100, HEIGHT // 2 + 10)
-            self.draw_text("Press ESC to exit", WIDTH // 2 - 100, HEIGHT // 2 + 50)
-            self.draw_text("Press ENTER to start over", WIDTH // 2 - 125, HEIGHT // 2 + 90)
+            if self.entering_initials:
+                self.draw_text("NEW HIGH SCORE!", WIDTH // 2 - 120, HEIGHT // 2 - 60)
+                self.draw_text("Enter your initials:", WIDTH // 2 - 120, HEIGHT // 2 - 20)
+                
+                # Draw initials with blinking cursor
+                for i in range(3):
+                    char = self.current_initials[i] if i < len(self.current_initials) else "_"
+                    # Make cursor blink
+                    if i == len(self.current_initials) and pygame.time.get_ticks() % 1000 < 500:
+                        char = "|"
+                    self.draw_text(char, WIDTH // 2 - 40 + i * 30, HEIGHT // 2 + 20, size=48)
+                
+                self.draw_text("Press ENTER when done", WIDTH // 2 - 140, HEIGHT // 2 + 80)
+            elif self.show_high_scores:
+                self.draw_text("HIGH SCORES", WIDTH // 2 - 100, HEIGHT // 2 - 150)
+                
+                for i, entry in enumerate(self.high_score_manager.high_scores[:10]):
+                    y_pos = HEIGHT // 2 - 100 + i * 30
+                    self.draw_text(f"{i+1}. {entry['initials']} {entry['score']:06d} L{entry['level']}", 
+                                  WIDTH // 2 - 100, y_pos)
+                
+                self.draw_text("Press ENTER to start over", WIDTH // 2 - 125, HEIGHT // 2 + 200)
+            else:
+                self.draw_text("GAME OVER", WIDTH // 2 - 100, HEIGHT // 2 - 30)
+                self.draw_text(f"Final Score: {self.score}", WIDTH // 2 - 100, HEIGHT // 2 + 10)
+                self.draw_text("Press ESC to exit", WIDTH // 2 - 100, HEIGHT // 2 + 50)
+                self.draw_text("Press ENTER to start over", WIDTH // 2 - 125, HEIGHT // 2 + 90)
         
         if self.paused:
             self.draw_text("PAUSED", WIDTH // 2 - 50, HEIGHT // 2)
@@ -746,8 +1053,12 @@ class Game:
         # Update display
         pygame.display.flip()
     
-    def draw_text(self, text, x, y):
-        text_surface = self.font.render(text, True, WHITE)
+    def draw_text(self, text, x, y, size=None, color=WHITE):
+        if size:
+            font = pygame.font.Font(None, size)
+        else:
+            font = self.font
+        text_surface = font.render(text, True, color)
         screen.blit(text_surface, (x, y))
         
     def create_reflection_effect(self, position):
@@ -773,20 +1084,41 @@ game = None
 # Main game loop
 def main():
     global game
-    game = Game()
-    running = True
+    show_intro = True
     
-    while running:
-        clock.tick(FPS)
+    while True:
+        # Show intro animation
+        if show_intro:
+            intro = IntroAnimation(screen, assets_dir, ship_img, asteroid_images)
+            if not intro.run():
+                pygame.quit()
+                sys.exit()
+            show_intro = False
         
-        # Handle events
-        running = game.handle_events()
+        # Start the game
+        game = Game()
+        running = True
         
-        # Update game state
-        game.update()
+        while running:
+            clock.tick(FPS)
+            
+            # Handle events
+            running = game.handle_events()
+            
+            # Update game state
+            game.update()
+            
+            # Draw everything
+            game.draw()
+            
+            # Check if we should show intro again
+            if not running and game.show_intro:
+                show_intro = True
+                break
         
-        # Draw everything
-        game.draw()
+        # If we're not showing intro again, exit
+        if not show_intro:
+            break
     
     pygame.quit()
     sys.exit()
