@@ -524,11 +524,11 @@ class ModernHighScoresScreen:
                 error_rect = error_text.get_rect(center=(WIDTH//2, riddle_y + 280))
                 surface.blit(error_text, error_rect)
                 
-            # Debug: Show what answers are accepted
-            debug_font = pygame.font.Font(None, 20)
-            debug_text = debug_font.render("(Type 'seven' or '7')", True, (150, 150, 150))
-            debug_rect = debug_text.get_rect(center=(WIDTH//2, riddle_y + 310))
-            surface.blit(debug_text, debug_rect)
+            # Hint: Show accepted answers
+            hint_font_small = pygame.font.Font(None, 20)
+            hint_text = hint_font_small.render("(Type 'seven' or '7')", True, (150, 150, 150))
+            hint_rect = hint_text.get_rect(center=(WIDTH//2, riddle_y + 310))
+            surface.blit(hint_text, hint_rect)
         else:
             # Normal instructions at bottom
             instruction = instruction_font.render("Press ENTER to continue", True, self.accent_color)

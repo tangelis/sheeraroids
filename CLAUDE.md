@@ -13,19 +13,19 @@ The codebase is organized into **10 modular files**, each under 800 lines, follo
 ### Core Files Structure
 ```
 main.py              (39 lines)   - Entry point and main game loop
-game.py              (422 lines)  - Core Game class with main logic
-sprites.py           (384 lines)  - All sprite classes (Player, Enemies, Projectiles)
-effects.py           (226 lines)  - Visual effects and explosion systems
-audio.py             (230 lines)  - Sound generation and audio loading
-screens.py           (213 lines)  - 80s retro game over screen
+game.py              (530 lines)  - Core Game class with main logic
+sprites.py           (400 lines)  - All sprite classes (Player, Enemies, Projectiles)
+effects.py           (320 lines)  - Visual effects and explosion systems
+audio.py             (680 lines)  - Sound generation and audio loading
+screens.py           (660 lines)  - 80s retro game over screen, high scores, riddle
 ui.py                (196 lines)  - UI components and mode selection
-highscores.py        (147 lines)  - High score management system
+highscores.py        (280 lines)  - High score management system
 utils.py             (64 lines)   - Asset loading and utility functions
 constants.py         (25 lines)   - Game constants and pygame init
 setup.py             (21 lines)   - Package setup configuration
 ```
 
-**Total modular code: 1,967 lines** (was previously 2,006 lines in single file)
+**Total modular code: ~3,215 lines** (was previously 2,006 lines in single file)
 
 ## Development Commands
 
@@ -71,9 +71,10 @@ python -m main
 ### game.py (Core Logic)
 **Key Classes:**
 - `Game`: Main game controller with state management
-- Game states: "playing", "transition", "game_over_80s", "entering_initials"
+- Game states: "playing", "death_pause", "game_over_80s", "entering_initials", "showing_high_scores", "correct_animation"
 - Handles collision detection, scoring, and level progression
 - Manages sprite groups and game physics
+- Updates explosions and particles during death pause for proper animation
 
 ### sprites.py (Game Entities)
 **Key Classes:**
@@ -87,19 +88,32 @@ python -m main
 **Key Classes:**
 - `ImageFragment`: Speed-based scaling fragments for explosions
 - `PlayerExplosion`: Spectacular player death explosion with shockwave
-- `Explosion`: Traditional particle explosions
+- `Explosion`: Traditional particle explosions with visible rings
+- `FinalDeathExplosion`: Two-burst particle explosion for epic final death
 
 ### audio.py (Sound System)
 **Functions:**
-- `create_explosion_sound()`: Procedural explosion effects
+- `create_explosion_sound()`: Sharp, punchy first explosion (0.3s)
+- `create_explosion_sound_2()`: Deeper, bigger second explosion (0.5s)
+- `create_player_death_sound()`: Unique sound for non-final deaths (0.8s)
+- `create_particle_shrinking_sound()`: 3-second particle fade effect
+- `create_final_death_sound_80s()`: Short explosive death blast (0.5s)
 - `create_80s_death_sound()`: Retro-style death sound
 - `create_80s_transition_music()`: 5-second transition music
+- `create_game_over_music()`: Dramatic game over screen music
+- `create_typing_sound()`: 80s computer beep for initial entry
+- `create_high_scores_music()`: Upbeat music for high scores screen
+- `create_transition_sweep()`: Screen transition sound effect
+- `create_victory_fanfare()`: Triumphant sound for riddle completion
+- `create_wrong_answer_sound()`: Buzzer for incorrect riddle answers
 - `load_all_sounds()`: Sound loading coordination
 
 ### screens.py (Visual Screens)
 **Key Classes:**
 - `RetroGameOverScreen`: 80s-style game over with neon effects
-- Features: scrolling high scores, geometric shapes, starfield background
+- `ModernHighScoresScreen`: Scrolling high scores with riddle challenge
+- `CorrectAnswerAnimation`: Victory animation after solving riddle
+- Features: scrolling high scores, geometric shapes, starfield background, math riddle
 
 ### ui.py (User Interface)
 **Key Classes:**
@@ -108,9 +122,10 @@ python -m main
 
 ### highscores.py (Score Management)
 **Key Classes:**
-- `HighScoreManager`: Local JSON file storage and management with Supabase preparation
-- `HighScoreEntry`: 3-character initial entry with arrow key navigation
+- `HighScoreManager`: Local JSON file storage with 20 default scores (1000-50)
+- `HighScoreEntry`: 3-character initial entry with modern UI and cursor
 - Auto-saves to `high_scores.json` in game directory immediately after entry
+- Supabase-ready structure with timestamps and device IDs
 
 ### utils.py (Utilities)
 **Functions:**
@@ -211,10 +226,13 @@ from audio import load_all_sounds
 ## Critical Implementation Details
 
 ### Game State Management
-- States: "playing" → "game_over_80s" → "entering_initials" → restart
+- States: "playing" → "death_pause" → "game_over_80s" → "showing_high_scores" → "correct_animation" → restart
+- **Death Pause**: Allows explosions to animate before transitioning
+- **High Scores Flow**: Always shows scrolling high scores after game over
+- **Riddle System**: Must answer "seven" or "7" to "What is the sum of three and four?"
 - **IMPORTANT**: Only ENTER key works on end screens (all other keys ignored)
-- Auto-transition to initials entry after 2 seconds (120 frames at 60fps)
-- Player sprite must be hidden immediately on death: `player.hidden = True`
+- Auto-transition from game over to high scores after 2 seconds (120 frames at 60fps)
+- Player sprite hidden after 10 frames to show explosion first
 
 ### Controls and User Experience
 - **Rotation Speed**: Set to 1.5 for fine movement control ("like a clock, resolution down to the second")
@@ -229,9 +247,21 @@ from audio import load_all_sounds
 - **Permanent Scaling**: Fragments maintain their speed-based size throughout lifetime
 
 ### Audio System
-- Procedural 80s-style death sound using numpy synthesis
-- Shooting sounds with volume control
-- Background music during transitions
+- **Final Death Sequence**: 
+  - Immediate: First explosion sound (0.3s)
+  - 333ms: Second explosion sound (0.5s)
+  - 500ms: Particle shrinking sound (3s)
+- **Screen Music**:
+  - Game Over: Dramatic minor chord progression
+  - High Scores: Upbeat 80s synth with fast bass
+  - Victory: Triumphant fanfare
+- **Sound Effects**:
+  - Player death: Descending sweep with warble
+  - Wrong answer: Harsh buzzer
+  - Typing: 880Hz beep
+  - Transitions: Frequency sweep
+- Procedural generation using numpy synthesis
+- All music loops continuously until screen change
 
 ### File Persistence
 - High scores save to `high_scores.json` in game directory
@@ -349,6 +379,9 @@ The game has been thoroughly tested with:
 - ✅ High score system with local file persistence
 - ✅ ENTER-only controls on end screens
 - ✅ Player death effects and respawn system
+- ✅ Epic final death with two-burst explosions
+- ✅ Full sound design for all screens and transitions
+- ✅ High scores scrolling with riddle challenge
 
 ### Future Development Guidelines
 
@@ -368,4 +401,4 @@ The game has been thoroughly tested with:
 ### Project Status
 - **License**: MIT License
 - **Active Development**: Modular refactor completed, all features functional
-- **Code Quality**: ✅ All files under 800 lines | ✅ Modular architecture | ✅ Clean dependencies | ✅ Speed slider removed | ✅ Fixed dramatic scaling | ✅ Local high score persistence
+- **Code Quality**: ✅ All files under 800 lines | ✅ Modular architecture | ✅ Clean dependencies | ✅ Speed slider removed | ✅ Fixed dramatic scaling | ✅ Local high score persistence | ✅ Complete sound design | ✅ Epic final death sequence

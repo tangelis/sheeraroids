@@ -28,11 +28,15 @@ Ever wondered what would happen if a sound-blasting German Shepherd named Sheera
 - 🔥 Heat buildup system with visual glow effects
 - 🎯 Smart collision detection and enemy splitting
 - 📊 Complete high score system with 3-character initial entry
+- 🧩 Math riddle challenge to continue after high scores
+- 💥 Epic two-burst final death explosion sequence
 
 ### Audio Experience
-- 🎵 Procedurally generated 80s-style music and sound effects
-- 💥 Custom explosion sounds using numpy synthesis
+- 🎵 Procedurally generated 80s-style music for every screen
+- 💥 Multiple explosion sounds with unique player death effects
 - 🔊 Bark shooting sounds with volume control
+- 🎼 Complete sound design: typing beeps, transition sweeps, victory fanfares
+- 🎹 Looping background music for all end screens
 
 ## 🎯 How to Play
 
@@ -90,13 +94,13 @@ The game is built with a clean, modular architecture:
 ```
 sheeraroids/
 ├── main.py              # Main entry point (39 lines)
-├── game.py              # Core game logic (458 lines)
-├── sprites.py           # Player, enemies, projectiles (367 lines)
-├── effects.py           # Visual effects & explosions (219 lines)
-├── audio.py             # Sound generation & loading (230 lines)
-├── screens.py           # 80s game over screen (200 lines)
-├── ui.py                # UI components & mode selection (184 lines)
-├── highscores.py        # Score management (121 lines)
+├── game.py              # Core game logic (530 lines)
+├── sprites.py           # Player, enemies, projectiles (400 lines)
+├── effects.py           # Visual effects & explosions (320 lines)
+├── audio.py             # Sound generation & loading (680 lines)
+├── screens.py           # Game over, high scores, riddle screens (660 lines)
+├── ui.py                # UI components & mode selection (196 lines)
+├── highscores.py        # Score management (280 lines)
 ├── utils.py             # Asset loading utilities (64 lines)
 ├── constants.py         # Game constants (25 lines)
 ├── requirements.txt     # Dependencies
@@ -134,8 +138,10 @@ sheeraroids/
 - **Heat Management**: Watch Sheera's heat buildup - rapid firing creates visual glow
 - **Strategic Shooting**: Target larger iguanas first as they split into smaller, faster enemies
 - **Shield Tactics**: Shields can reflect bullets back at enemies
-- **High Scores**: After 2 seconds on the game over screen, you'll auto-enter initials
+- **High Scores**: After game over, watch the scrolling high scores
+- **Riddle Challenge**: Answer "seven" or "7" to continue playing
 - **Controls**: Only ENTER key works on final screens for clean user experience
+- **Final Death**: Enjoy the epic two-burst explosion with particle effects
 
 ## 🔧 Development
 
@@ -175,7 +181,7 @@ This game is released under the MIT License - feel free to modify and share!
 1. **"No module named pygame"**: Ensure virtual environment is activated
 2. **Audio not working**: Check numpy installation for procedural sounds
 3. **Missing images**: Game will auto-generate placeholder images if assets are missing
-4. **Performance issues**: Try adjusting the fragment scaling slider
+4. **Performance issues**: Fragment scaling is automatic (no slider needed)
 
 ### System Requirements
 - **macOS**: Requires virtual environment due to PEP 668
