@@ -6,6 +6,71 @@ import math
 import random
 from constants import WIDTH, HEIGHT
 
+class FinalDeathExplosion(pygame.sprite.Sprite):
+    """Simple but cool two-burst particle explosion for final death"""
+    def __init__(self, center, game, sound1=None, sound2=None, particle_sound=None):
+        pygame.sprite.Sprite.__init__(self)
+        self.center = center
+        self.game = game
+        self.frame = 0
+        self.burst_triggered = [False, False, False]  # Two bursts + particle sound
+        self.sound1 = sound1
+        self.sound2 = sound2
+        self.particle_sound = particle_sound
+        
+        # Dummy sprite requirements
+        self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
+        self.rect = self.image.get_rect(center=center)
+        
+    def update(self):
+        self.frame += 1
+        
+        # First burst - immediate with sound
+        if self.frame == 1 and not self.burst_triggered[0]:
+            self.create_particle_burst(self.center, 100, 8, [(255, 255, 0), (255, 200, 0), (255, 150, 0)])
+            if self.sound1:
+                self.sound1.play()
+            self.burst_triggered[0] = True
+        
+        # Second burst - delayed for impact with different sound
+        if self.frame == 20 and not self.burst_triggered[1]:
+            self.create_particle_burst(self.center, 150, 12, [(255, 0, 0), (255, 100, 0), (255, 255, 255)])
+            if self.sound2:
+                self.sound2.play()
+            self.burst_triggered[1] = True
+        
+        # Particle shrinking sound - slightly after second burst
+        if self.frame == 30 and not self.burst_triggered[2]:
+            if self.particle_sound:
+                self.particle_sound.play()
+            self.burst_triggered[2] = True
+        
+        # Kill after all effects are done
+        if self.frame > 200:  # Let particles live longer
+            self.kill()
+    
+    def create_particle_burst(self, center, count, max_speed, colors):
+        """Create a burst of particles"""
+        from sprites import FireworkParticle
+        
+        for i in range(count):
+            angle = (i / count) * 2 * math.pi + random.uniform(-0.2, 0.2)
+            speed = random.uniform(max_speed * 0.8, max_speed * 1.5)  # Faster particles
+            velocity = pygame.math.Vector2(math.cos(angle) * speed, math.sin(angle) * speed)
+            color = random.choice(colors)
+            
+            particle = FireworkParticle(center, velocity, color)
+            particle.lifetime = random.randint(120, 180)  # Much longer lifetime for shrinking effect
+            # Recreate image with new size
+            new_size = random.randint(4, 8)
+            particle.size = new_size
+            particle.image = pygame.Surface((new_size * 2, new_size * 2), pygame.SRCALPHA)
+            pygame.draw.circle(particle.image, color, (new_size, new_size), new_size)
+            particle.rect = particle.image.get_rect(center=center)
+            
+            self.game.all_sprites.add(particle)
+            self.game.particles.add(particle)
+
 class ImageFragment(pygame.sprite.Sprite):
     def __init__(self, surface, position, velocity, rotation_speed, game):
         pygame.sprite.Sprite.__init__(self)
@@ -200,9 +265,12 @@ class Explosion(pygame.sprite.Sprite):
             (255, 0, 0), (255, 165, 0), (255, 255, 0),
             (0, 255, 0), (0, 0, 255), (128, 0, 128), (255, 255, 255)
         ]
-        # Create a dummy image for the sprite
-        self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
+        # Create visible explosion sprite
+        self.radius = size * 20
+        self.max_radius = size * 60
+        self.image = pygame.Surface((self.max_radius * 2, self.max_radius * 2), pygame.SRCALPHA)
         self.rect = self.image.get_rect(center=center)
+        self.alpha = 255
         
     def create_particles(self, game):
         from sprites import FireworkParticle
@@ -211,17 +279,47 @@ class Explosion(pygame.sprite.Sprite):
         for _ in range(num_particles):
             # Random direction
             angle = random.uniform(0, 2 * math.pi)
-            speed = random.uniform(1, 3 + self.size)
+            speed = random.uniform(2, 5 + self.size)  # Increased speed
             velocity = pygame.math.Vector2(math.cos(angle) * speed, math.sin(angle) * speed)
             color = random.choice(self.colors)
             particle = FireworkParticle(self.center, velocity, color)
             game.all_sprites.add(particle)
+            game.particles.add(particle)  # Add to particles group too!
             self.particles.append(particle)
         
     def update(self):
-        now = pygame.time.get_ticks()
-        if now - self.last_update > self.frame_duration:
-            self.last_update = now
-            self.frame += 1
-            if self.frame >= 1:  # Just need one frame to create particles
-                self.kill()
+        # Expand explosion radius
+        if self.radius < self.max_radius:
+            self.radius += self.size * 3
+        
+        # Fade out
+        self.alpha = max(0, self.alpha - 8)
+        
+        # Clear image
+        self.image.fill((0, 0, 0, 0))
+        
+        # Draw explosion circles
+        if self.alpha > 0:
+            # Draw multiple colored rings for dramatic effect
+            for i in range(3):
+                ring_radius = self.radius - i * 10
+                if ring_radius > 0:
+                    color_idx = (self.frame + i) % len(self.colors)
+                    color = self.colors[color_idx]
+                    ring_alpha = self.alpha // (i + 1)
+                    pygame.draw.circle(self.image, (*color, ring_alpha),
+                                     (self.max_radius, self.max_radius),
+                                     int(ring_radius), max(2, 5 - i))
+            
+            # Draw bright center flash
+            if self.radius < self.max_radius // 2:
+                flash_radius = int(self.radius * 1.5)
+                pygame.draw.circle(self.image, (255, 255, 255, min(255, self.alpha * 2)),
+                                 (self.max_radius, self.max_radius),
+                                 flash_radius)
+        
+        self.frame += 1
+        
+        # Kill after fully expanded and faded
+        if self.radius >= self.max_radius and self.alpha <= 0:
+            self.kill()

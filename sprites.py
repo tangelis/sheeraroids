@@ -383,3 +383,13 @@ class FireworkParticle(pygame.sprite.Sprite):
         else:
             self.alpha = max(0, self.alpha - self.fade_rate)
             self.image.set_alpha(int(self.alpha))
+            
+            # Shrinking effect for final death particles
+            if self.lifetime < 100:  # Start shrinking in last 100 frames
+                shrink_factor = self.lifetime / 100.0
+                new_size = max(1, int(self.size * shrink_factor))
+                if new_size != self.rect.width // 2:  # Only recreate if size changed
+                    color = self.image.get_at((self.rect.width // 2, self.rect.height // 2))[:3]
+                    self.image = pygame.Surface((new_size * 2, new_size * 2), pygame.SRCALPHA)
+                    pygame.draw.circle(self.image, color, (new_size, new_size), new_size)
+                    self.rect = self.image.get_rect(center=self.position)

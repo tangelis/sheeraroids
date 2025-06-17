@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides comprehensive guidance to Claude Code instances when working with the Sheeraroids game repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -13,18 +13,19 @@ The codebase is organized into **10 modular files**, each under 800 lines, follo
 ### Core Files Structure
 ```
 main.py              (39 lines)   - Entry point and main game loop
-game.py              (458 lines)  - Core Game class with main logic
-sprites.py           (367 lines)  - All sprite classes (Player, Enemies, Projectiles)
-effects.py           (219 lines)  - Visual effects and explosion systems
+game.py              (422 lines)  - Core Game class with main logic
+sprites.py           (384 lines)  - All sprite classes (Player, Enemies, Projectiles)
+effects.py           (226 lines)  - Visual effects and explosion systems
 audio.py             (230 lines)  - Sound generation and audio loading
-screens.py           (200 lines)  - 80s retro game over screen
-ui.py                (184 lines)  - UI components and mode selection
-highscores.py        (121 lines)  - High score management system
+screens.py           (213 lines)  - 80s retro game over screen
+ui.py                (196 lines)  - UI components and mode selection
+highscores.py        (147 lines)  - High score management system
 utils.py             (64 lines)   - Asset loading and utility functions
 constants.py         (25 lines)   - Game constants and pygame init
+setup.py             (21 lines)   - Package setup configuration
 ```
 
-**Total modular code: 1,928 lines** (was previously 2,006 lines in single file)
+**Total modular code: 1,967 lines** (was previously 2,006 lines in single file)
 
 ## Development Commands
 
@@ -34,9 +35,9 @@ constants.py         (25 lines)   - Game constants and pygame init
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
-# OR manually: pip install pygame numpy
+# Install dependencies (use pip3 on macOS/Linux)
+pip3 install -r requirements.txt
+# OR manually: pip3 install pygame numpy
 
 # Run the game
 python main.py
@@ -187,7 +188,7 @@ from constants import WIDTH, HEIGHT, WHITE, BLACK, screen, clock
 # Game uses sprites, effects, ui, audio
 from sprites import Sheera, Asteroid, SoundWave
 from effects import PlayerExplosion, Explosion
-from ui import SpeedScaleSlider, show_mode_selection
+from ui import show_mode_selection  # Note: SpeedScaleSlider was removed
 from audio import load_all_sounds
 
 # Clean dependency chain prevents circular imports
@@ -243,6 +244,7 @@ from audio import load_all_sounds
 - **Python 3.6+ Required**: Uses f-strings and modern pygame features
 - **Pygame 2.1.0+ Required**: For advanced sprite and audio features
 - **NumPy Dependency**: Required for procedural audio generation
+- **pip3 vs pip**: Use `pip3` on macOS/Linux systems to ensure Python 3 compatibility
 - **All Files Under 800 Lines**: Maintain this limit when making changes
 - **Speed Slider Removed**: Previous debug slider system was completely removed
 
@@ -356,6 +358,14 @@ The game has been thoroughly tested with:
 4. **Maintain 800-line limit** - critical for maintainability
 5. **Document ALL changes** - this session history is essential for continuity
 
----
+## Additional Project Context
 
-**Code Quality Status**: ✅ All files under 800 lines | ✅ Modular architecture | ✅ Clean dependencies | ✅ Speed slider removed | ✅ Fixed dramatic scaling | ✅ Local high score persistence
+### Web Version
+- The repository also contains an HTML5/JavaScript version in the `web/` directory
+- Web version mirrors the core gameplay of the Python version
+- Deployed for browser-based play
+
+### Project Status
+- **License**: MIT License
+- **Active Development**: Modular refactor completed, all features functional
+- **Code Quality**: ✅ All files under 800 lines | ✅ Modular architecture | ✅ Clean dependencies | ✅ Speed slider removed | ✅ Fixed dramatic scaling | ✅ Local high score persistence

@@ -34,7 +34,9 @@ def main():
             game.update()
             
             # Draw everything
-            game.draw()
+            draw_result = game.draw()
+            if draw_result == "restart":
+                running = False  # Break out to restart
 
 if __name__ == "__main__":
     main()

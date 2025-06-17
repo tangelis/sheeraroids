@@ -6,13 +6,16 @@ import math
 import random
 from constants import WIDTH, HEIGHT, WHITE, BLACK, screen, clock
 from sprites import Sheera, Asteroid, SoundWave, FireworkParticle
-from effects import Explosion
+from effects import Explosion, FinalDeathExplosion
 from highscores import HighScoreManager, HighScoreEntry
-from screens import RetroGameOverScreen
+from screens import RetroGameOverScreen, ModernHighScoresScreen, CorrectAnswerAnimation
 from audio import load_all_sounds
 
 # Load all sounds at module level
-shoot_sound, explosion_sound, death_sound_80s, transition_music_80s = load_all_sounds()
+(shoot_sound, explosion_sound, explosion_sound_2, death_sound_80s, transition_music_80s, 
+ final_death_sound_80s, game_over_music, typing_sound, high_scores_music,
+ transition_sweep, victory_fanfare, wrong_answer_sound, particle_shrinking_sound,
+ player_death_sound) = load_all_sounds()
 
 class Game:
     def __init__(self, game_mode="normal"):
@@ -28,10 +31,14 @@ class Game:
         self.high_score_manager = HighScoreManager()
         self.high_score_entry = None
         self.retro_game_over = None
-        self.game_state = "playing"  # "playing", "transition", "game_over_80s", "entering_initials"
+        self.game_state = "playing"  # "playing", "death_pause", "game_over_80s", "entering_initials", "showing_high_scores", "correct_animation"
+        self.high_scores_screen = None
+        self.correct_animation = None
         self.transition_timer = 0
         self.transition_duration = 300  # 5 seconds at 60fps
         self.music_started = False
+        self.death_pause_timer = 0
+        self.death_pause_duration = 60  # 1 second pause after death
         
         
         # Speed multipliers based on game mode
@@ -95,7 +102,8 @@ class Game:
                     return False
                 
                 # UNIVERSAL RESTART: ENTER key restarts game from any death-related state
-                if event.key == pygame.K_RETURN and self.game_over:
+                # BUT NOT during high scores screen (which has its own ENTER handling for riddle)
+                if event.key == pygame.K_RETURN and self.game_over and self.game_state != "showing_high_scores":
                     return "restart"
                 
                 # Handle different game states
@@ -120,10 +128,36 @@ class Game:
                 
                 elif self.game_state == "entering_initials":
                     # Handle initial entry
+                    if event.type == pygame.KEYDOWN and typing_sound:
+                        if event.key not in [pygame.K_RETURN, pygame.K_ESCAPE]:
+                            typing_sound.play()
                     self.high_score_entry.handle_input(event)
                     if self.high_score_entry.done:
-                        # After entering initials, save and restart
-                        return "restart"
+                        # After entering initials, show high scores
+                        self.game_state = "showing_high_scores"
+                        self.high_scores_screen = ModernHighScoresScreen(self.high_score_manager, self.score, wrong_answer_sound)
+                        # Play transition and high scores music
+                        if transition_sweep:
+                            transition_sweep.play()
+                        if high_scores_music:
+                            high_scores_music.play(-1)
+                elif self.game_state == "showing_high_scores":
+                    # Handle high scores screen
+                    self.high_scores_screen.handle_input(event)
+                    # Only progress if riddle is answered correctly
+                    if self.high_scores_screen.done and self.high_scores_screen.riddle_correct:
+                        # Show celebration animation
+                        self.game_state = "correct_animation"
+                        self.correct_animation = CorrectAnswerAnimation()
+                        # Stop high scores music and play victory fanfare
+                        if high_scores_music:
+                            high_scores_music.stop()
+                        if victory_fanfare:
+                            victory_fanfare.play()
+                    # If done but not correct, this should never happen due to our validation
+                elif self.game_state == "correct_animation":
+                    # Animation handles itself, just wait for it to finish
+                    pass
                 
             
         return True
@@ -133,28 +167,69 @@ class Game:
         if self.game_over and not self.explosion_created:
             self.explosion_created = True
             self.controls_disabled = True
-            # Hide the player sprite completely
-            self.player.hidden = True
-            # Remove player from all sprite groups so it won't be drawn
-            self.all_sprites.remove(self.player)
+            # DON'T hide player immediately - let explosion show first!
+            # We'll hide it after a short delay
             
-            # Play 80s style death sound
-            if death_sound_80s:
-                death_sound_80s.play()
+            # Check if it's the final death (game over)
+            if self.player.lives == 0:
+                # Longer pause for final death (3 seconds)
+                self.death_pause_duration = 180  # 3 seconds at 60fps
+            else:
+                # Normal pause duration for non-final deaths
+                self.death_pause_duration = 60  # 1 second
             
-            # Go DIRECTLY to 80s screen - skip transition animation
-            self.game_state = "game_over_80s"
-            self.retro_game_over = RetroGameOverScreen(self.score, self.high_score_manager.get_high_scores())
+            # Start death pause before showing 80s screen
+            self.game_state = "death_pause"
+            self.death_pause_timer = 0
         
-        # Handle paused or 80s screen states
+        # Handle paused or non-playing states
         if self.paused or self.game_state != "playing":
+            # Handle death pause
+            if self.game_state == "death_pause":
+                self.death_pause_timer += 1
+                # Hide player after a short delay to let explosion show
+                if self.death_pause_timer == 10:  # After 10 frames
+                    self.player.hidden = True
+                    if self.player in self.all_sprites:
+                        self.all_sprites.remove(self.player)
+                
+                # UPDATE EXPLOSIONS AND PARTICLES DURING DEATH PAUSE!
+                self.explosions.update()
+                self.particles.update()
+                # Also update any other explosion-related sprites
+                for sprite in self.all_sprites:
+                    if isinstance(sprite, (Explosion, FireworkParticle)):
+                        sprite.update()
+                
+                if self.death_pause_timer >= self.death_pause_duration:
+                    # Transition to 80s screen
+                    self.game_state = "game_over_80s"
+                    self.retro_game_over = RetroGameOverScreen(self.score, self.high_score_manager.get_high_scores())
+                    # Play game over music
+                    if game_over_music:
+                        game_over_music.play(-1)  # Loop indefinitely
             # Update 80s screen if active
-            if self.game_state == "game_over_80s" and self.retro_game_over:
+            elif self.game_state == "game_over_80s" and self.retro_game_over:
                 self.retro_game_over.update()
-                # After 2 seconds, automatically show initials entry
+                # After 2 seconds, check if it's a high score
                 if self.retro_game_over.should_show_initials():
-                    self.game_state = "entering_initials"
-                    self.high_score_entry = HighScoreEntry(self.score, self.high_score_manager)
+                    # Always show high scores screen after game over
+                    self.game_state = "showing_high_scores"
+                    self.high_scores_screen = ModernHighScoresScreen(self.high_score_manager, self.score, wrong_answer_sound)
+                    # Stop game over music and play high scores music
+                    if game_over_music:
+                        game_over_music.stop()
+                    if high_scores_music:
+                        high_scores_music.play(-1)  # Loop
+            # Update other game states
+            elif self.game_state == "entering_initials" and self.high_score_entry:
+                # Update handled in draw for visual updates
+                pass
+            elif self.game_state == "showing_high_scores" and self.high_scores_screen:
+                # Update handled in draw for visual updates
+                pass
+            elif self.game_state == "correct_animation" and self.correct_animation:
+                self.correct_animation.update()
             return
             
         # Check for spacebar held down (rapid fire) - only if controls aren't disabled
@@ -197,6 +272,9 @@ class Game:
             self.explosions.add(explosion)
             self.all_sprites.add(explosion)
             explosion.create_particles(self)
+            # Play explosion sound
+            if explosion_sound:
+                explosion_sound.play()
             
             # Split asteroid
             new_asteroids = asteroid.split()
@@ -216,11 +294,42 @@ class Game:
             for asteroid in hits:
                 self.player.lives -= 1
                 
-                # Create firework explosion
-                explosion = Explosion(asteroid.rect.center, asteroid.size)
-                self.explosions.add(explosion)
-                self.all_sprites.add(explosion)
-                explosion.create_particles(self)
+                # Create explosion - special one for final death
+                if self.player.lives <= 0:  # This is the final death
+                    # Create MASSIVE final death explosion
+                    player_center = self.player.rect.center
+                    
+                    # Create the special two-burst explosion with sounds
+                    final_explosion = FinalDeathExplosion(
+                        player_center, 
+                        self,
+                        sound1=explosion_sound,
+                        sound2=explosion_sound_2,
+                        particle_sound=particle_shrinking_sound
+                    )
+                    self.explosions.add(final_explosion)
+                    self.all_sprites.add(final_explosion)
+                    
+                    # Create additional visual explosions (no sounds)
+                    for i in range(8):  # More explosions!
+                        angle = (i * 2 * math.pi / 8)
+                        for distance in [30, 60]:  # Two rings
+                            offset_x = int(math.cos(angle) * distance)
+                            offset_y = int(math.sin(angle) * distance)
+                            explosion_pos = (player_center[0] + offset_x, player_center[1] + offset_y)
+                            explosion = Explosion(explosion_pos, 2)  # Medium explosion
+                            self.explosions.add(explosion)
+                            self.all_sprites.add(explosion)
+                            explosion.create_particles(self)
+                else:
+                    # Normal explosion at PLAYER position when hit
+                    explosion = Explosion(self.player.rect.center, 2)  # Medium explosion
+                    self.explosions.add(explosion)
+                    self.all_sprites.add(explosion)
+                    explosion.create_particles(self)
+                    # Play player death sound (different from explosion)
+                    if player_death_sound:
+                        player_death_sound.play()
                 
                 # Split asteroid
                 new_asteroids = asteroid.split()
@@ -247,7 +356,21 @@ class Game:
     
     def draw(self):
         # Handle different game states
-        if self.game_state == "game_over_80s":
+        if self.game_state == "death_pause":
+            # Continue showing game state during death pause
+            screen.fill(BLACK)
+            self.all_sprites.draw(screen)
+            self.explosions.draw(screen)
+            self.particles.draw(screen)
+            
+            # No special screen effects needed for simple explosion
+            
+            self.draw_text(f"Score: {self.score}", 10, 10)
+            self.draw_text(f"Level: {self.level}", 10, 50)
+            self.draw_text(f"Lives: {self.player.lives}", 10, 90)
+            pygame.display.flip()
+            return
+        elif self.game_state == "game_over_80s":
             if self.retro_game_over:
                 self.retro_game_over.draw(screen)
             pygame.display.flip()
@@ -255,6 +378,21 @@ class Game:
         elif self.game_state == "entering_initials":
             if self.high_score_entry:
                 self.high_score_entry.draw(screen)
+            pygame.display.flip()
+            return
+        elif self.game_state == "showing_high_scores":
+            if self.high_scores_screen:
+                self.high_scores_screen.draw(screen)
+            pygame.display.flip()
+            return
+        elif self.game_state == "correct_animation":
+            if self.correct_animation:
+                self.correct_animation.draw(screen)
+                if self.correct_animation.done:
+                    # Animation finished, restart game
+                    # Stop all music
+                    pygame.mixer.stop()
+                    return "restart"
             pygame.display.flip()
             return
         
