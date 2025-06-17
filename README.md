@@ -43,6 +43,7 @@ Ever wondered what would happen if a sound-blasting German Shepherd named Sheera
 ### Controls
 - **Move**: Arrow keys (↑ ← →)
 - **Shoot**: Spacebar (hold for rapid fire)
+- **Shield**: S key (hold to activate shield)
 - **Pause**: P
 - **Quit**: ESC
 
@@ -56,10 +57,17 @@ Ever wondered what would happen if a sound-blasting German Shepherd named Sheera
 ## 🛠️ Installation & Setup
 
 ### Prerequisites
-- Python 3.6+
+- Python 3.6+ (for running from source)
 - Virtual environment (required on modern macOS)
 
-### Quick Start
+### Windows Executable
+```
+# Download the latest release ZIP file
+# Extract the ZIP file to any location
+# Run SheeraVsIguanas.exe to play
+```
+
+### Quick Start (From Source)
 ```bash
 # Clone this repository
 git clone https://github.com/your-repo/sheeraroids.git
@@ -87,6 +95,18 @@ pip install pygame numpy
 python main.py
 ```
 
+### Building the Windows Executable
+```bash
+# Install cx_Freeze
+pip install cx_Freeze
+
+# Build the executable
+python setup.py build
+
+# The executable will be in the build/exe.win-amd64-x.x/ directory
+# (where x.x is your Python version)
+```
+
 ## 🏗️ Project Structure
 
 The game is built with a clean, modular architecture:
@@ -103,9 +123,11 @@ sheeraroids/
 ├── highscores.py        # Score management (280 lines)
 ├── utils.py             # Asset loading utilities (64 lines)
 ├── constants.py         # Game constants (25 lines)
+├── setup.py             # cx_Freeze build configuration
+├── build_exe.bat        # Windows executable build script
 ├── requirements.txt     # Dependencies
-├── CLAUDE.md           # Developer documentation
-└── assets/             # Game assets (images, sounds)
+├── CLAUDE.md            # Developer documentation
+└── assets/              # Game assets (images, sounds)
 ```
 
 **All files are under 800 lines** - perfectly modular and maintainable!
@@ -137,7 +159,7 @@ sheeraroids/
 - **Mode Selection**: Try both Accelerated and Slowed modes for different experiences  
 - **Heat Management**: Watch Sheera's heat buildup - rapid firing creates visual glow
 - **Strategic Shooting**: Target larger iguanas first as they split into smaller, faster enemies
-- **Shield Tactics**: Shields can reflect bullets back at enemies
+- **Shield Tactics**: Hold S to activate shields that can reflect bullets back at enemies. Shield strength recharges when not in use
 - **High Scores**: After game over, watch the scrolling high scores
 - **Riddle Challenge**: Answer "seven" or "7" to continue playing
 - **Controls**: Only ENTER key works on final screens for clean user experience
