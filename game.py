@@ -15,7 +15,7 @@ from audio import load_all_sounds
 (shoot_sound, explosion_sound, explosion_sound_2, death_sound_80s, transition_music_80s, 
  final_death_sound_80s, game_over_music, typing_sound, high_scores_music,
  transition_sweep, victory_fanfare, wrong_answer_sound, particle_shrinking_sound,
- player_death_sound) = load_all_sounds()
+ player_death_sound, shield_bounce_sound) = load_all_sounds()
 
 class Game:
     def __init__(self, game_mode="normal"):
@@ -287,6 +287,55 @@ class Game:
                 self.asteroids.add(new_asteroid)
                 self.all_sprites.add(new_asteroid)
         
+        # Check for shield-asteroid collisions
+        if self.player.shield_active and not self.player.hidden:
+            shield_radius = int(self.player.rect.width * (1.5 + self.player.shield_strength / self.player.max_shield))
+            shield_hits = []
+            
+            # Check each asteroid for collision with shield
+            for asteroid in self.asteroids:
+                distance = pygame.math.Vector2(asteroid.rect.center).distance_to(self.player.position)
+                if distance < shield_radius + asteroid.rect.width/2:
+                    shield_hits.append(asteroid)
+                    
+            # Handle shield-asteroid collisions
+            for asteroid in shield_hits:
+                # Remove the original asteroid
+                self.asteroids.remove(asteroid)
+                self.all_sprites.remove(asteroid)
+                
+                # Score based on asteroid size
+                self.score += (4 - asteroid.size) * 50
+                
+                # Create reflection effect
+                self.create_reflection_effect(asteroid.rect.center)
+                
+                # Play shield bounce sound
+                if shield_bounce_sound:
+                    shield_bounce_sound.play()
+                
+                # Split asteroid regardless of size (even size 1)
+                new_size = max(1, asteroid.size - 1)
+                for _ in range(3):  # Create 3 smaller asteroids
+                    new_asteroid = Asteroid(new_size)
+                    new_asteroid.rect.center = asteroid.rect.center
+                    new_asteroid.position = pygame.math.Vector2(asteroid.rect.center)
+                    
+                    # Bounce away from shield with random angle
+                    angle = random.uniform(0, 2 * math.pi)
+                    speed = random.uniform(2, 4) * self.speed_multiplier
+                    new_asteroid.velocity = pygame.math.Vector2(
+                        math.cos(angle) * speed, math.sin(angle) * speed
+                    )
+                    
+                    self.asteroids.add(new_asteroid)
+                    self.all_sprites.add(new_asteroid)
+                
+                # Reduce shield strength when hit
+                self.player.shield_strength = max(0, self.player.shield_strength - 10)
+                if self.player.shield_strength <= 0:
+                    self.player.shield_active = False
+        
         # Check for ship-asteroid collisions if player is not invulnerable or shielded
         if not self.player.invulnerable and not self.player.hidden and not self.player.shield_active:
             hits = pygame.sprite.spritecollide(self.player, self.asteroids, True, 
@@ -439,10 +488,40 @@ class Game:
             if heat_percent > 0:
                 self.draw_text(f"Heat: {heat_percent}%", WIDTH - 100, 50)
                 
-            # Show shield level
+            # Show shield level with enhanced display
             shield_percent = int((self.player.shield_strength / self.player.max_shield) * 100)
             if shield_percent > 0:
-                self.draw_text(f"Shield: {shield_percent}%", WIDTH - 100, 90)
+                # Text display
+                shield_text = f"Shield: {shield_percent}%"
+                
+                # Choose color based on shield strength
+                if shield_percent > 75:
+                    shield_color = (0, 255, 255)  # Cyan for high shield
+                elif shield_percent > 50:
+                    shield_color = (50, 200, 255)  # Bright blue for medium shield
+                elif shield_percent > 25:
+                    shield_color = (100, 100, 255)  # Purple-blue for low shield
+                else:
+                    shield_color = (200, 50, 255)  # Bright purple for critical shield
+                
+                # Draw text with shield color
+                shield_surface = self.font.render(shield_text, True, shield_color)
+                screen.blit(shield_surface, (WIDTH - 150, 90))
+                
+                # Draw shield bar
+                bar_width = 100
+                bar_height = 10
+                outline_rect = pygame.Rect(WIDTH - 150, 120, bar_width, bar_height)
+                fill_rect = pygame.Rect(WIDTH - 150, 120, int(bar_width * shield_percent / 100), bar_height)
+                
+                # Draw shield bar with pulsating effect for active shield
+                if self.player.shield_active:
+                    pulse = math.sin(pygame.time.get_ticks() * 0.01) * 0.2 + 0.8
+                    pygame.draw.rect(screen, (shield_color[0]*pulse, shield_color[1]*pulse, shield_color[2]*pulse), fill_rect)
+                else:
+                    pygame.draw.rect(screen, shield_color, fill_rect)
+                    
+                pygame.draw.rect(screen, WHITE, outline_rect, 1)
         elif self.game_over:
             # Show lives as 0 when game over
             self.draw_text(f"Lives: 0", WIDTH - 100, 10)
@@ -452,6 +531,11 @@ class Game:
         mode_color = (255, 200, 100) if self.game_mode == "accelerated" else (100, 200, 255) if self.game_mode == "slowed" else WHITE
         mode_surface = self.font.render(f"Mode: {mode_text}", True, mode_color)
         screen.blit(mode_surface, (WIDTH // 2 - 100, 10))
+        
+        # Show shield controls hint
+        if not self.game_over and not self.paused:
+            shield_hint = self.font.render("Press S for shield", True, (100, 150, 255))
+            screen.blit(shield_hint, (WIDTH // 2 - 100, HEIGHT - 30))
         
         if self.game_over and self.game_state != "transition":
             self.draw_text("GAME OVER", WIDTH // 2 - 100, HEIGHT // 2 - 30)

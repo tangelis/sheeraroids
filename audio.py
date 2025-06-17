@@ -679,6 +679,39 @@ def create_victory_fanfare(duration=2.0, sample_rate=22050):
         print(f"Could not create victory fanfare: {e}")
         return None
 
+def create_shield_bounce_sound(duration=0.2, sample_rate=22050):
+    """Create shield bounce sound effect"""
+    try:
+        frames = int(duration * sample_rate)
+        time = np.linspace(0, duration, frames)
+        
+        # High frequency ping with quick decay
+        freq = 1200
+        ping = np.sin(2 * np.pi * freq * time)
+        
+        # Add some harmonics for richness
+        ping += 0.3 * np.sin(2 * np.pi * freq * 2 * time)
+        
+        # Quick decay envelope
+        envelope = np.exp(-time * 30)
+        ping *= envelope
+        
+        # Add some digital artifacts for sci-fi feel
+        artifacts = np.random.normal(0, 0.2, frames) * np.exp(-time * 40)
+        
+        # Combine
+        sound = ping + artifacts
+        
+        # Normalize
+        sound = np.clip(sound, -1, 1)
+        sound = (sound * 32767 * 0.7).astype(np.int16)
+        
+        stereo = np.stack([sound, sound], axis=-1)
+        return pygame.sndarray.make_sound(stereo)
+    except Exception as e:
+        print(f"Could not create shield bounce sound: {e}")
+        return None
+
 def load_all_sounds():
     """Load all game sounds"""
     shoot_sound = load_shoot_sound()
@@ -735,7 +768,11 @@ def load_all_sounds():
     if player_death_sound:
         player_death_sound.set_volume(0.7)
     
+    shield_bounce_sound = create_shield_bounce_sound()
+    if shield_bounce_sound:
+        shield_bounce_sound.set_volume(0.6)
+    
     return (shoot_sound, explosion_sound, explosion_sound_2, death_sound_80s, transition_music_80s, 
             final_death_sound_80s, game_over_music, typing_sound, high_scores_music,
             transition_sweep, victory_fanfare, wrong_answer_sound, particle_shrinking_sound,
-            player_death_sound)
+            player_death_sound, shield_bounce_sound)

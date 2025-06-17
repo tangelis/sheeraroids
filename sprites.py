@@ -82,12 +82,15 @@ class Sheera(pygame.sprite.Sprite):
         
         # Shield properties
         self.shield_active = False
-        self.shield_strength = 0
+        self.shield_strength = 50  # Start with 50% shield
         self.max_shield = 100
         self.shield_increase = 2
         self.shield_decrease = 5
         self.shield_colors = [
-            (0, 100, 255), (0, 50, 255), (0, 0, 255), (75, 0, 130)
+            (0, 255, 255),  # Cyan
+            (50, 200, 255), # Bright blue
+            (100, 100, 255), # Purple-blue
+            (200, 50, 255)  # Bright purple
         ]
 
     def update(self):
@@ -121,6 +124,22 @@ class Sheera(pygame.sprite.Sprite):
             # Limit speed
             if self.velocity.length() > self.max_speed:
                 self.velocity.scale_to_length(self.max_speed)
+                
+        # Shield activation with S key
+        if keys[pygame.K_s]:
+            # Activate shield if we have shield strength
+            if self.shield_strength > 0:
+                self.shield_active = True
+                # Decrease shield strength while active
+                self.shield_strength = max(0, self.shield_strength - self.shield_decrease * 0.05)
+                # Deactivate shield if strength reaches 0
+                if self.shield_strength <= 0:
+                    self.shield_active = False
+        else:
+            # Deactivate shield when key is released
+            self.shield_active = False
+            # Recharge shield when not in use
+            self.shield_strength = min(self.max_shield, self.shield_strength + self.shield_increase * 0.1)
         
         # Apply friction
         self.velocity *= self.friction
@@ -207,13 +226,28 @@ class Sheera(pygame.sprite.Sprite):
         # Create shield surface
         shield_surf = pygame.Surface((shield_size * 2, shield_size * 2), pygame.SRCALPHA)
         
-        # Draw shield as a circle with pulsating effect
-        pulse = math.sin(pygame.time.get_ticks() * 0.01) * 0.1 + 0.9
-        for radius in range(shield_size, shield_size - 5, -1):
-            adjusted_radius = int(radius * pulse)
-            alpha = int(150 * shield_percent)
-            shield_color = (*color, alpha)
-            pygame.draw.circle(shield_surf, shield_color, (shield_size, shield_size), adjusted_radius, 2)
+        # Draw shield as a circle with enhanced pulsating effect
+        pulse = math.sin(pygame.time.get_ticks() * 0.015) * 0.15 + 0.95
+        
+        # Draw multiple layers for a more vibrant effect
+        for i in range(3):
+            layer_radius = shield_size - (i * 3)
+            if layer_radius > 0:
+                adjusted_radius = int(layer_radius * pulse)
+                # Higher alpha for more vibrance
+                alpha = int(200 * shield_percent)
+                # Slightly different color for each layer
+                layer_color = list(color)
+                layer_color[i % 3] = min(255, layer_color[i % 3] + 30)
+                shield_color = (*layer_color, alpha)
+                # Thicker lines for more visibility
+                thickness = 3 if i == 0 else 2
+                pygame.draw.circle(shield_surf, shield_color, (shield_size, shield_size), adjusted_radius, thickness)
+        
+        # Add a bright glow in the center
+        glow_radius = int(shield_size * 0.8 * pulse)
+        glow_color = (*color, 50)  # Semi-transparent
+        pygame.draw.circle(shield_surf, glow_color, (shield_size, shield_size), glow_radius, 0)
         
         # Draw the shield on the screen
         shield_rect = shield_surf.get_rect(center=self.rect.center)
