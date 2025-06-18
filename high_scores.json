@@ -1,0 +1,162 @@
+[
+  {
+    "id": 1750199284102,
+    "name": "BBK",
+    "score": 3100,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:28:04.102323",
+    "device_id": "c4d6446c-2de6-4b88-8ae8-be26abe2ca9d"
+  },
+  {
+    "id": 1750215323564,
+    "name": "BBK",
+    "score": 2250,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T22:55:23.564964",
+    "device_id": "c4d6446c-2de6-4b88-8ae8-be26abe2ca9d"
+  },
+  {
+    "id": 1,
+    "name": "ACE",
+    "score": 1000,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609833",
+    "device_id": "default"
+  },
+  {
+    "id": 2,
+    "name": "MAX",
+    "score": 950,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609859",
+    "device_id": "default"
+  },
+  {
+    "id": 3,
+    "name": "ZAP",
+    "score": 900,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609863",
+    "device_id": "default"
+  },
+  {
+    "id": 4,
+    "name": "BOB",
+    "score": 850,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609865",
+    "device_id": "default"
+  },
+  {
+    "id": 5,
+    "name": "JOE",
+    "score": 800,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609867",
+    "device_id": "default"
+  },
+  {
+    "id": 6,
+    "name": "SUE",
+    "score": 750,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609868",
+    "device_id": "default"
+  },
+  {
+    "id": 7,
+    "name": "TOM",
+    "score": 700,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609870",
+    "device_id": "default"
+  },
+  {
+    "id": 8,
+    "name": "ANN",
+    "score": 650,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609872",
+    "device_id": "default"
+  },
+  {
+    "id": 9,
+    "name": "DAN",
+    "score": 600,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609873",
+    "device_id": "default"
+  },
+  {
+    "id": 10,
+    "name": "KIM",
+    "score": 550,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609874",
+    "device_id": "default"
+  },
+  {
+    "id": 11,
+    "name": "REX",
+    "score": 500,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609876",
+    "device_id": "default"
+  },
+  {
+    "id": 12,
+    "name": "LEO",
+    "score": 450,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609877",
+    "device_id": "default"
+  },
+  {
+    "id": 13,
+    "name": "SAM",
+    "score": 400,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609878",
+    "device_id": "default"
+  },
+  {
+    "id": 14,
+    "name": "EVE",
+    "score": 350,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609881",
+    "device_id": "default"
+  },
+  {
+    "id": 15,
+    "name": "JAX",
+    "score": 300,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609883",
+    "device_id": "default"
+  },
+  {
+    "id": 16,
+    "name": "LIZ",
+    "score": 250,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609885",
+    "device_id": "default"
+  },
+  {
+    "id": 17,
+    "name": "RAY",
+    "score": 200,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609886",
+    "device_id": "default"
+  },
+  {
+    "id": 18,
+    "name": "MEG",
+    "score": 150,
+    "game_mode": "normal",
+    "created_at": "2025-06-17T18:26:41.609888",
+    "device_id": "default"
+  }
+]

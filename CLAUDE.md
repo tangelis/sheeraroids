@@ -43,6 +43,18 @@ pip3 install -r requirements.txt
 python main.py
 ```
 
+### Building Executable (NEW)
+```bash
+# Windows users can use the batch file
+build_exe.bat
+
+# OR manually install cx_Freeze and build
+pip install cx_Freeze
+python setup.py build
+
+# Executable will be created in build/ directory
+```
+
 ### Development Tasks
 ```bash
 # Test imports work correctly
@@ -106,7 +118,8 @@ python -m main
 - `create_transition_sweep()`: Screen transition sound effect
 - `create_victory_fanfare()`: Triumphant sound for riddle completion
 - `create_wrong_answer_sound()`: Buzzer for incorrect riddle answers
-- `load_all_sounds()`: Sound loading coordination
+- **NEW** `create_shield_bounce_sound()`: High-frequency ping for shield deflections (0.2s)
+- `load_all_sounds()`: Sound loading coordination (now returns 15 sounds)
 
 ### screens.py (Visual Screens)
 **Key Classes:**
@@ -151,12 +164,23 @@ python -m main
 - **80s Aesthetic**: Neon colors, geometric shapes, digital rain effects, scrolling starfields
 - **Particle Systems**: Fireworks, trails, shockwave effects, and reflection particles
 - **Player Death Effects**: Immediate sprite hiding, 80s death sound, direct transition to retro screen
+- **Enhanced Shield Effects**: Multi-layer pulsating shield with color-coded strength indicator
 
 ### Physics Engine
 - Realistic momentum and friction
 - Collision detection with proper sprite splitting
 - Heat buildup system affecting weapon performance
-- Shield reflection mechanics
+- **NEW Shield Mechanics**: 
+  - Shields deflect asteroids with bounce physics
+  - Asteroids split into 3 pieces on shield impact
+  - Shield strength depletes on hits and active use
+  - Auto-recharge when shield is inactive
+
+### Executable Build System (NEW)
+- **cx_Freeze Integration**: Create standalone Windows executables
+- **build_exe.bat**: One-click build script for Windows
+- **Asset Bundling**: All game assets included in executable
+- **No Console Window**: Clean GUI experience on Windows
 
 ### Audio Experience
 - Procedurally generated sounds using numpy
@@ -238,7 +262,13 @@ from audio import load_all_sounds
 - **Rotation Speed**: Set to 1.5 for fine movement control ("like a clock, resolution down to the second")
 - **Lives System**: Player has 3 lives with proper respawn mechanics
 - **Heat Management**: Visual glow effects when rapid firing
-- **Shield System**: Reflects projectiles with particle effects
+- **Shield System**: 
+  - **NEW: Shield vs Asteroids**: Shield now deflects asteroids, splitting them and bouncing them away
+  - **Shield Controls**: Press and hold 'S' key to activate shield
+  - **Shield Strength**: Starts at 50%, depletes when active or hit, recharges when inactive
+  - **Visual Feedback**: Enhanced multi-layer shield with pulsating effect and color-coded strength
+  - **Shield Bar**: Visual indicator with color-coded health (cyan→blue→purple)
+  - **Shield Bounce**: Asteroids split into 3 pieces when hitting shield, even size 1 asteroids
 
 ### Fragment Scaling System
 - **Velocity Range**: 1-15 for dramatic scaling differences
@@ -260,8 +290,10 @@ from audio import load_all_sounds
   - Wrong answer: Harsh buzzer
   - Typing: 880Hz beep
   - Transitions: Frequency sweep
+  - **NEW Shield bounce**: High-frequency ping with harmonics (1200Hz base)
 - Procedural generation using numpy synthesis
 - All music loops continuously until screen change
+- Shield bounce sound at 60% volume for balance
 
 ### File Persistence
 - High scores save to `high_scores.json` in game directory
@@ -274,9 +306,11 @@ from audio import load_all_sounds
 - **Python 3.6+ Required**: Uses f-strings and modern pygame features
 - **Pygame 2.1.0+ Required**: For advanced sprite and audio features
 - **NumPy Dependency**: Required for procedural audio generation
+- **cx_Freeze Optional**: Only needed for building standalone executables
 - **pip3 vs pip**: Use `pip3` on macOS/Linux systems to ensure Python 3 compatibility
 - **All Files Under 800 Lines**: Maintain this limit when making changes
 - **Speed Slider Removed**: Previous debug slider system was completely removed
+- **Shield Controls**: Press 'S' key to activate shield (hint shown on screen)
 
 ## Testing the Refactored Code
 
@@ -301,6 +335,13 @@ python main.py
 #    - High score entry works with arrow keys
 #    - Only ENTER key advances final screens
 #    - Scores save to high_scores.json locally
+#    - NEW: Shield activates with 'S' key
+#    - NEW: Shield deflects asteroids and splits them
+#    - NEW: Shield strength bar shows color-coded health
+#    - NEW: Shield bounce sound plays on asteroid deflection
+
+# 5. Build executable (Windows):
+build_exe.bat
 ```
 
 ## Session History & Key Learnings
@@ -400,5 +441,5 @@ The game has been thoroughly tested with:
 
 ### Project Status
 - **License**: MIT License
-- **Active Development**: Modular refactor completed, all features functional
-- **Code Quality**: ✅ All files under 800 lines | ✅ Modular architecture | ✅ Clean dependencies | ✅ Speed slider removed | ✅ Fixed dramatic scaling | ✅ Local high score persistence | ✅ Complete sound design | ✅ Epic final death sequence
+- **Active Development**: Modular refactor completed, all features functional, shield mechanics enhanced
+- **Code Quality**: ✅ All files under 800 lines | ✅ Modular architecture | ✅ Clean dependencies | ✅ Speed slider removed | ✅ Fixed dramatic scaling | ✅ Local high score persistence | ✅ Complete sound design | ✅ Epic final death sequence | ✅ Enhanced shield system | ✅ Executable build support

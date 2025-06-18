@@ -1,673 +1,428 @@
 """
-Game screens: 80s Game Over screen and other visual effects
+Game screens: Purple initials entry and clean high scores display
 """
 import pygame
 import math
 import random
 from constants import WIDTH, HEIGHT, WHITE, BLACK, screen, clock
 
-class RetroGameOverScreen:
+
+class PurpleInitialsScreen:
+    """Purple-themed dashboard for entering initials"""
+    def __init__(self, score, typing_sound=None):
+        self.score = score
+        self.typing_sound = typing_sound
+        self.initials = ""
+        self.done = False
+        self.animation_time = 0
+        self.cursor_blink_timer = 0
+        self.cursor_visible = True
+        
+        # Purple color palette
+        self.purple_dark = (40, 20, 60)
+        self.purple_mid = (80, 40, 120)
+        self.purple_light = (120, 60, 180)
+        self.purple_bright = (160, 80, 220)
+        self.accent_pink = (255, 100, 200)
+        self.accent_cyan = (100, 255, 255)
+        self.white = (255, 255, 255)
+        
+        # Design elements
+        self.particles = []
+        for _ in range(30):
+            self.particles.append({
+                'x': random.randint(0, WIDTH),
+                'y': random.randint(0, HEIGHT),
+                'size': random.uniform(2, 5),
+                'speed': random.uniform(0.5, 2),
+                'angle': random.uniform(0, 2 * math.pi),
+                'rotation_speed': random.uniform(-0.05, 0.05)
+            })
+        
+        # Geometric shapes for decoration
+        self.shapes = []
+        for _ in range(10):
+            self.shapes.append({
+                'type': random.choice(['triangle', 'square', 'hexagon']),
+                'x': random.randint(0, WIDTH),
+                'y': random.randint(0, HEIGHT),
+                'size': random.uniform(20, 50),
+                'rotation': random.uniform(0, 2 * math.pi),
+                'rotation_speed': random.uniform(-0.02, 0.02),
+                'color': random.choice([self.purple_light, self.purple_mid, self.accent_pink])
+            })
+    
+    def handle_input(self, event):
+        """Handle keyboard input for initials entry"""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_BACKSPACE:
+                if len(self.initials) > 0:
+                    self.initials = self.initials[:-1]
+                    if self.typing_sound:
+                        self.typing_sound.play()
+            elif event.key == pygame.K_RETURN:
+                if len(self.initials) == 3:
+                    self.done = True
+            else:
+                # Add character if it's a letter and we have less than 3 initials
+                if event.unicode.isalpha() and len(self.initials) < 3:
+                    self.initials += event.unicode.upper()
+                    if self.typing_sound:
+                        self.typing_sound.play()
+    
+    def update(self):
+        """Update animation elements"""
+        self.animation_time += 1
+        self.cursor_blink_timer += 1
+        
+        # Blink cursor
+        if self.cursor_blink_timer >= 30:
+            self.cursor_visible = not self.cursor_visible
+            self.cursor_blink_timer = 0
+        
+        # Update particles
+        for particle in self.particles:
+            particle['y'] -= particle['speed']
+            particle['angle'] += particle['rotation_speed']
+            
+            # Wrap around
+            if particle['y'] < -10:
+                particle['y'] = HEIGHT + 10
+                particle['x'] = random.randint(0, WIDTH)
+        
+        # Update shapes
+        for shape in self.shapes:
+            shape['rotation'] += shape['rotation_speed']
+    
+    def draw_shape(self, surface, shape_type, x, y, size, rotation, color):
+        """Draw a geometric shape"""
+        points = []
+        
+        if shape_type == 'triangle':
+            for i in range(3):
+                angle = rotation + (i * 2 * math.pi / 3)
+                px = x + size * math.cos(angle)
+                py = y + size * math.sin(angle)
+                points.append((px, py))
+        elif shape_type == 'square':
+            for i in range(4):
+                angle = rotation + (i * math.pi / 2)
+                px = x + size * math.cos(angle)
+                py = y + size * math.sin(angle)
+                points.append((px, py))
+        elif shape_type == 'hexagon':
+            for i in range(6):
+                angle = rotation + (i * math.pi / 3)
+                px = x + size * math.cos(angle) * 0.8
+                py = y + size * math.sin(angle) * 0.8
+                points.append((px, py))
+        
+        if len(points) >= 3:
+            pygame.draw.polygon(surface, color, points, 2)
+    
+    def draw_gradient_background(self, surface):
+        """Draw purple gradient background"""
+        for y in range(HEIGHT):
+            ratio = y / HEIGHT
+            # Interpolate between dark purple at top and mid purple at bottom
+            r = int(self.purple_dark[0] * (1 - ratio) + self.purple_mid[0] * ratio)
+            g = int(self.purple_dark[1] * (1 - ratio) + self.purple_mid[1] * ratio)
+            b = int(self.purple_dark[2] * (1 - ratio) + self.purple_mid[2] * ratio)
+            pygame.draw.line(surface, (r, g, b), (0, y), (WIDTH, y))
+    
+    def draw_dashboard_frame(self, surface):
+        """Draw the dashboard frame with purple theme"""
+        # Outer frame
+        pygame.draw.rect(surface, self.purple_bright, (50, 50, WIDTH - 100, HEIGHT - 100), 3)
+        
+        # Inner decorative frame
+        pygame.draw.rect(surface, self.purple_light, (70, 70, WIDTH - 140, HEIGHT - 140), 2)
+        
+        # Corner decorations
+        corner_size = 30
+        corners = [
+            (70, 70),  # Top left
+            (WIDTH - 70 - corner_size, 70),  # Top right
+            (70, HEIGHT - 70 - corner_size),  # Bottom left
+            (WIDTH - 70 - corner_size, HEIGHT - 70 - corner_size)  # Bottom right
+        ]
+        
+        for cx, cy in corners:
+            # Draw corner accent
+            pygame.draw.lines(surface, self.accent_pink, False, 
+                            [(cx, cy + corner_size), (cx, cy), (cx + corner_size, cy)], 3)
+    
+    def draw_particles(self, surface):
+        """Draw floating particles"""
+        for particle in self.particles:
+            # Create glowing effect
+            glow_surf = pygame.Surface((particle['size'] * 4, particle['size'] * 4), pygame.SRCALPHA)
+            glow_color = (*self.accent_cyan, 100)
+            pygame.draw.circle(glow_surf, glow_color, 
+                             (int(particle['size'] * 2), int(particle['size'] * 2)), 
+                             int(particle['size'] * 2))
+            surface.blit(glow_surf, (particle['x'] - particle['size'] * 2, particle['y'] - particle['size'] * 2))
+            
+            # Draw core
+            pygame.draw.circle(surface, self.accent_cyan, 
+                             (int(particle['x']), int(particle['y'])), 
+                             int(particle['size']))
+    
+    def draw_shapes(self, surface):
+        """Draw background geometric shapes"""
+        for shape in self.shapes:
+            self.draw_shape(surface, shape['type'], shape['x'], shape['y'], 
+                          shape['size'], shape['rotation'], shape['color'])
+    
+    def draw_title(self, surface):
+        """Draw the title text"""
+        font_large = pygame.font.Font(None, 72)
+        font_medium = pygame.font.Font(None, 36)
+        
+        # Main title with glow
+        title_text = "ENTER YOUR INITIALS"
+        title_surf = font_large.render(title_text, True, self.white)
+        title_rect = title_surf.get_rect(center=(WIDTH // 2, 150))
+        
+        # Draw glow
+        for offset in range(5, 0, -1):
+            glow_surf = font_large.render(title_text, True, self.purple_bright)
+            glow_rect = glow_surf.get_rect(center=(WIDTH // 2, 150))
+            glow_surface = pygame.Surface((glow_surf.get_width() + offset*4, 
+                                         glow_surf.get_height() + offset*4), pygame.SRCALPHA)
+            glow_surface.fill((*self.purple_bright, 50 // offset))
+            surface.blit(glow_surface, (glow_rect.x - offset*2, glow_rect.y - offset*2), 
+                        special_flags=pygame.BLEND_ADD)
+        
+        surface.blit(title_surf, title_rect)
+        
+        # Score display
+        score_text = f"FINAL SCORE: {self.score:,}"
+        score_surf = font_medium.render(score_text, True, self.accent_pink)
+        score_rect = score_surf.get_rect(center=(WIDTH // 2, 220))
+        surface.blit(score_surf, score_rect)
+    
+    def draw_input_box(self, surface):
+        """Draw the initials input box"""
+        box_width = 300
+        box_height = 80
+        box_x = WIDTH // 2 - box_width // 2
+        box_y = HEIGHT // 2 - box_height // 2
+        
+        # Draw box background
+        box_surf = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
+        pygame.draw.rect(box_surf, (*self.purple_dark, 180), (0, 0, box_width, box_height))
+        pygame.draw.rect(box_surf, self.purple_bright, (0, 0, box_width, box_height), 3)
+        surface.blit(box_surf, (box_x, box_y))
+        
+        # Draw initials
+        font_huge = pygame.font.Font(None, 64)
+        display_text = self.initials + ('_' if self.cursor_visible and len(self.initials) < 3 else '')
+        text_surf = font_huge.render(display_text, True, self.white)
+        text_rect = text_surf.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+        surface.blit(text_surf, text_rect)
+        
+        # Draw character slots
+        slot_y = box_y + box_height + 20
+        slot_size = 60
+        slot_spacing = 80
+        start_x = WIDTH // 2 - (3 * slot_spacing - (slot_spacing - slot_size)) // 2
+        
+        for i in range(3):
+            slot_x = start_x + i * slot_spacing
+            color = self.accent_pink if i < len(self.initials) else self.purple_light
+            pygame.draw.rect(surface, color, (slot_x, slot_y, slot_size, 5))
+    
+    def draw_instructions(self, surface):
+        """Draw instructions at the bottom"""
+        font_small = pygame.font.Font(None, 28)
+        
+        instructions = [
+            "Type 3 letters for your initials",
+            "Press ENTER when done"
+        ]
+        
+        y_start = HEIGHT - 150
+        for i, instruction in enumerate(instructions):
+            text_surf = font_small.render(instruction, True, self.purple_light)
+            text_rect = text_surf.get_rect(center=(WIDTH // 2, y_start + i * 30))
+            surface.blit(text_surf, text_rect)
+    
+    def draw(self, surface):
+        """Draw the complete purple initials screen"""
+        self.update()
+        
+        # Draw background
+        self.draw_gradient_background(surface)
+        
+        # Draw decorative elements
+        self.draw_shapes(surface)
+        self.draw_particles(surface)
+        
+        # Draw dashboard frame
+        self.draw_dashboard_frame(surface)
+        
+        # Draw content
+        self.draw_title(surface)
+        self.draw_input_box(surface)
+        self.draw_instructions(surface)
+
+
+class CleanHighScoresScreen:
+    """Clean high scores display screen"""
     def __init__(self, score, high_scores):
         self.score = score
         self.high_scores = high_scores
         self.frame = 0
-        self.scroll_offset = 0
-        self.scroll_speed = 1
-        self.timer = 0  # Timer for 2-second auto-transition
+        self.timer = 0  # Timer to track 10 seconds
+        self.can_continue = False  # Can press ENTER after 10 seconds
         
-        # 80s color palette
-        self.neon_pink = (255, 20, 147)
-        self.neon_cyan = (0, 255, 255)
-        self.neon_purple = (138, 43, 226)
-        self.neon_green = (50, 205, 50)
-        self.neon_orange = (255, 165, 0)
+        # Color palette
+        self.bg_color = (20, 10, 40)  # Dark purple background
+        self.title_color = (255, 200, 100)  # Gold for title
+        self.score_color = (100, 255, 255)  # Cyan for scores
+        self.highlight_color = (255, 100, 200)  # Pink for player's score
+        self.text_color = (200, 200, 255)  # Light purple for text
         
-        # Background elements
+        # Starfield background
         self.stars = []
-        for _ in range(100):
+        for _ in range(200):
             self.stars.append({
                 'x': random.randint(0, WIDTH),
                 'y': random.randint(0, HEIGHT),
-                'speed': random.uniform(0.5, 2.0),
-                'brightness': random.randint(100, 255)
+                'brightness': random.randint(50, 255),
+                'twinkle_speed': random.uniform(0.02, 0.05)
             })
-        
-        # Grid lines for 80s aesthetic
-        self.grid_lines = []
-        for i in range(0, WIDTH, 40):
-            self.grid_lines.append(i)
     
     def update(self):
+        """Update animations and timer"""
         self.frame += 1
-        self.timer += 1  # Increment timer (60fps = 120 frames for 2 seconds)
+        self.timer += 1
         
-        # Update scrolling high scores
-        self.scroll_offset += self.scroll_speed
-        if self.scroll_offset > len(self.high_scores) * 40 + HEIGHT:
-            self.scroll_offset = 0
+        # After 10 seconds (600 frames at 60fps), allow continuing
+        if self.timer >= 600:
+            self.can_continue = True
         
-        # Update stars
+        # Update star twinkle
         for star in self.stars:
-            star['y'] += star['speed']
-            if star['y'] > HEIGHT:
-                star['y'] = 0
-                star['x'] = random.randint(0, WIDTH)
-    
-    def should_show_initials(self):
-        """Check if 2 seconds have passed (120 frames at 60fps)"""
-        return self.timer >= 120
-    
-    def draw_grid_background(self, surface):
-        """Draw 80s style grid background"""
-        # Draw perspective grid
-        grid_color = (40, 40, 80)
-        
-        # Horizontal lines (perspective)
-        for y in range(HEIGHT//2, HEIGHT, 20):
-            # Calculate perspective scaling
-            distance = y - HEIGHT//2
-            scale = 1 + (distance / HEIGHT)
-            line_width = max(1, int(3 / scale))
-            
-            start_x = WIDTH//2 - (WIDTH * scale)//2
-            end_x = WIDTH//2 + (WIDTH * scale)//2
-            
-            if start_x > -WIDTH and end_x < WIDTH * 2:
-                pygame.draw.line(surface, grid_color, (start_x, y), (end_x, y), line_width)
-        
-        # Vertical lines (perspective)
-        for i, x in enumerate(self.grid_lines):
-            # Calculate perspective
-            center_offset = x - WIDTH//2
-            for y in range(HEIGHT//2, HEIGHT, 5):
-                distance = y - HEIGHT//2
-                scale = 1 + (distance / HEIGHT)
-                perspective_x = WIDTH//2 + (center_offset * scale)
-                
-                if 0 <= perspective_x <= WIDTH:
-                    pygame.draw.circle(surface, grid_color, (int(perspective_x), y), 1)
+            star['brightness'] = 128 + 127 * math.sin(self.frame * star['twinkle_speed'])
     
     def draw_stars(self, surface):
-        """Draw moving starfield"""
+        """Draw twinkling starfield"""
         for star in self.stars:
-            alpha = star['brightness']
-            star_color = (alpha, alpha, alpha)
-            pygame.draw.circle(surface, star_color, (int(star['x']), int(star['y'])), 1)
+            brightness = int(star['brightness'])
+            color = (brightness, brightness, brightness)
+            pygame.draw.circle(surface, color, (star['x'], star['y']), 1)
     
-    def draw_neon_text(self, surface, text, size, color, x, y, glow=True):
-        """Draw text with neon glow effect"""
-        font = pygame.font.Font(None, size)
+    def draw_title(self, surface):
+        """Draw the HIGH SCORES title"""
+        font_title = pygame.font.Font(None, 96)
         
-        if glow:
-            # Draw glow effect
-            for offset in range(5, 0, -1):
-                glow_color = tuple(min(255, c + offset * 10) for c in color)
-                glow_alpha = 100 - offset * 15
-                
-                # Create glow surface
-                glow_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-                glow_text = font.render(text, True, (*glow_color, glow_alpha))
-                
-                # Draw glow in multiple positions
-                for dx in range(-offset, offset + 1):
-                    for dy in range(-offset, offset + 1):
-                        if dx != 0 or dy != 0:
-                            glow_rect = glow_text.get_rect(center=(x + dx, y + dy))
-                            glow_surface.blit(glow_text, glow_rect)
-                
-                surface.blit(glow_surface, (0, 0))
+        # Draw title with glow effect
+        title_text = "HIGH SCORES"
         
-        # Draw main text
-        main_text = font.render(text, True, color)
-        text_rect = main_text.get_rect(center=(x, y))
-        surface.blit(main_text, text_rect)
+        # Glow layers
+        for offset in range(10, 0, -2):
+            glow_alpha = 30 // (offset // 2)
+            glow_surf = font_title.render(title_text, True, self.title_color)
+            glow_rect = glow_surf.get_rect(center=(WIDTH // 2, 100))
+            
+            glow_surface = pygame.Surface((glow_surf.get_width() + offset*4, 
+                                         glow_surf.get_height() + offset*4), pygame.SRCALPHA)
+            glow_surface.fill((*self.title_color, glow_alpha))
+            surface.blit(glow_surface, (glow_rect.x - offset*2, glow_rect.y - offset*2), 
+                        special_flags=pygame.BLEND_ADD)
+        
+        # Main title
+        title_surf = font_title.render(title_text, True, self.title_color)
+        title_rect = title_surf.get_rect(center=(WIDTH // 2, 100))
+        surface.blit(title_surf, title_rect)
     
-    def draw_geometric_shapes(self, surface):
-        """Draw 80s geometric shapes"""
-        # Pulsating triangles
-        pulse = math.sin(self.frame * 0.1) * 0.3 + 0.7
+    def draw_scores(self, surface):
+        """Draw the high scores list"""
+        font_score = pygame.font.Font(None, 48)
+        font_rank = pygame.font.Font(None, 36)
         
-        # Left triangle
-        triangle_size = int(50 * pulse)
-        triangle_points = [
-            (100, 200),
-            (100 - triangle_size, 200 + triangle_size),
-            (100 + triangle_size, 200 + triangle_size)
-        ]
-        pygame.draw.polygon(surface, self.neon_cyan, triangle_points, 3)
+        # Starting position for scores
+        y_start = 200
+        line_height = 45
         
-        # Right triangle
-        triangle_points = [
-            (WIDTH - 100, 200),
-            (WIDTH - 100 - triangle_size, 200 + triangle_size),
-            (WIDTH - 100 + triangle_size, 200 + triangle_size)
-        ]
-        pygame.draw.polygon(surface, self.neon_pink, triangle_points, 3)
-        
-        # Rotating diamonds
-        rotation = self.frame * 2
-        diamond_size = 30
-        
-        for i, color in enumerate([self.neon_purple, self.neon_green, self.neon_orange]):
-            x = 150 + i * 100
-            y = 100
+        # Draw top 10 scores
+        for i, entry in enumerate(self.high_scores[:10]):
+            y_pos = y_start + i * line_height
             
-            # Calculate diamond points with rotation
-            angle_rad = math.radians(rotation + i * 45)
-            cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
+            # Check if this is the player's score
+            is_player_score = entry.get('score') == self.score and i < 10
             
-            points = []
-            for dx, dy in [(0, -diamond_size), (diamond_size, 0), (0, diamond_size), (-diamond_size, 0)]:
-                rx = dx * cos_a - dy * sin_a + x
-                ry = dx * sin_a + dy * cos_a + y
-                points.append((rx, ry))
+            # Choose color
+            if i == 0:
+                color = (255, 215, 0)  # Gold for 1st
+            elif i == 1:
+                color = (192, 192, 192)  # Silver for 2nd
+            elif i == 2:
+                color = (205, 127, 50)  # Bronze for 3rd
+            elif is_player_score:
+                color = self.highlight_color  # Highlight player's score
+            else:
+                color = self.score_color
             
-            pygame.draw.polygon(surface, color, points, 2)
+            # Draw rank
+            rank_text = f"{i + 1}."
+            rank_surf = font_rank.render(rank_text, True, color)
+            surface.blit(rank_surf, (200, y_pos))
+            
+            # Draw initials
+            initials_text = entry.get('initials', '???')
+            initials_surf = font_score.render(initials_text, True, color)
+            surface.blit(initials_surf, (280, y_pos - 5))
+            
+            # Draw score
+            score_text = f"{entry.get('score', 0):,}"
+            score_surf = font_score.render(score_text, True, color)
+            score_rect = score_surf.get_rect(right=WIDTH - 200)
+            score_rect.y = y_pos - 5
+            surface.blit(score_surf, score_rect)
+            
+            # Add pulsing effect for player's score
+            if is_player_score:
+                pulse = math.sin(self.frame * 0.1) * 0.3 + 0.7
+                overlay = pygame.Surface((WIDTH - 400, line_height), pygame.SRCALPHA)
+                overlay.fill((*self.highlight_color, int(30 * pulse)))
+                surface.blit(overlay, (200, y_pos - 5), special_flags=pygame.BLEND_ADD)
     
-    def draw_scrolling_scores(self, surface):
-        """Draw scrolling high scores"""
-        font = pygame.font.Font(None, 36)
+    def draw_continue_prompt(self, surface):
+        """Draw the continue prompt"""
+        font_prompt = pygame.font.Font(None, 36)
         
-        # Current score highlight
-        self.draw_neon_text(surface, f"YOUR SCORE: {self.score}", 48, self.neon_cyan, WIDTH//2, 400)
-        
-        # Scrolling high scores
-        for i, entry in enumerate(self.high_scores):
-            y_pos = 500 + i * 40 - self.scroll_offset
+        if self.can_continue:
+            # Pulsing effect for prompt
+            pulse = math.sin(self.frame * 0.05) * 0.3 + 0.7
+            prompt_color = tuple(int(c * pulse) for c in self.text_color)
             
-            if -50 < y_pos < HEIGHT + 50:
-                score_text = f"{i+1:2d}. {entry['initials']} - {entry['score']:,}"
-                color = self.neon_pink if i % 2 == 0 else self.neon_green
-                self.draw_neon_text(surface, score_text, 32, color, WIDTH//2, y_pos, glow=False)
+            prompt_text = "Press ENTER to play again"
+            prompt_surf = font_prompt.render(prompt_text, True, prompt_color)
+            prompt_rect = prompt_surf.get_rect(center=(WIDTH // 2, HEIGHT - 80))
+            surface.blit(prompt_surf, prompt_rect)
+        else:
+            # Show countdown
+            seconds_left = max(0, 10 - self.timer // 60)
+            countdown_text = f"Continue in {seconds_left}..."
+            countdown_surf = font_prompt.render(countdown_text, True, self.text_color)
+            countdown_rect = countdown_surf.get_rect(center=(WIDTH // 2, HEIGHT - 80))
+            surface.blit(countdown_surf, countdown_rect)
     
     def draw(self, surface):
-        """Draw the complete 80s game over screen"""
-        # Clear screen with dark background
-        surface.fill((10, 10, 30))
-        
-        # Draw background elements
-        self.draw_grid_background(surface)
-        self.draw_stars(surface)
-        
-        # Draw geometric shapes
-        self.draw_geometric_shapes(surface)
-        
-        # Main "GAME OVER" text with pulsing effect
-        pulse = math.sin(self.frame * 0.15) * 0.2 + 1.0
-        game_over_size = int(96 * pulse)
-        self.draw_neon_text(surface, "GAME OVER", game_over_size, self.neon_pink, WIDTH//2, 200)
-        
-        # Add subtitle
-        self.draw_neon_text(surface, "SHEERA'S MISSION COMPLETE", 36, self.neon_cyan, WIDTH//2, 280)
-        
-        # Draw scrolling scores
-        self.draw_scrolling_scores(surface)
-        
-        # Show different message based on timer
-        if self.timer < 120:  # Before 2 seconds
-            remaining = int((120 - self.timer) / 60) + 1  # Convert frames to seconds
-            self.draw_neon_text(surface, f"Continue in {remaining}...", 28, self.neon_orange, WIDTH//2, HEIGHT - 60, glow=False)
-        else:
-            self.draw_neon_text(surface, "PRESS ENTER TO CONTINUE", 28, self.neon_orange, WIDTH//2, HEIGHT - 60, glow=False)
-        
-        # Update frame counter
-        self.update()
-
-
-class ModernHighScoresScreen:
-    """Modern high scores display screen with riddle system"""
-    def __init__(self, high_score_manager, player_score, wrong_answer_sound=None):
-        self.high_score_manager = high_score_manager
-        self.player_score = player_score
-        self.wrong_answer_sound = wrong_answer_sound
-        self.animation_time = 0
-        self.particles = []
-        self.done = False  # ONLY set to True when riddle is solved correctly
-        self.scroll_offset = 0
-        self.scroll_speed = 2
-        self.auto_scroll = True
-        self.total_height = 0  # Will calculate based on scores
-        self.visible_start = 200  # Where scores start being visible
-        self.visible_end = HEIGHT - 100  # Where scores stop being visible
-        
-        # Riddle system
-        self.riddle_active = False
-        self.riddle_timer = 0
-        self.riddle_answer = ""
-        self.riddle_correct = False
-        self.wrong_answer_shake = 0
-        self.cursor_visible = True
-        self.cursor_timer = 0
-        
-        # Modern color palette
-        self.primary_color = (100, 200, 255)  # Soft blue
-        self.accent_color = (255, 100, 150)   # Soft pink
-        self.gold_color = (255, 215, 0)       # Gold for top 3
-        self.silver_color = (192, 192, 192)   # Silver
-        self.bronze_color = (205, 127, 50)    # Bronze
-        self.bg_gradient_top = (20, 25, 40)   # Dark blue
-        self.bg_gradient_bottom = (40, 20, 60) # Dark purple
-        
-        # Generate floating particles
-        for _ in range(20):
-            self.particles.append({
-                'x': random.randint(0, WIDTH),
-                'y': random.randint(0, HEIGHT),
-                'size': random.randint(1, 3),
-                'speed': random.uniform(0.5, 1.5),
-                'opacity': random.randint(50, 150)
-            })
-    
-    def handle_input(self, event):
-        """Handle input - riddle system"""
-        if event.type == pygame.KEYDOWN:
-            # First check if we need to activate riddle
-            if not self.riddle_active and self.auto_scroll:
-                if event.key == pygame.K_RETURN:
-                    # ENTER activates the riddle
-                    self.riddle_active = True
-                    self.auto_scroll = False
-                # Ignore all other keys while scrolling
-                return
-            
-            # Only handle input if riddle is active
-            elif self.riddle_active:
-                # Handle riddle input
-                if event.key == pygame.K_BACKSPACE:
-                    if len(self.riddle_answer) > 0:
-                        self.riddle_answer = self.riddle_answer[:-1]
-                elif event.key == pygame.K_RETURN:
-                    # Only process if there's an answer
-                    if self.riddle_answer.strip():  # Check for non-empty answer
-                        # Check answer - ONLY accept "seven" or "7"
-                        if self.riddle_answer.lower().strip() == "seven" or self.riddle_answer.strip() == "7":
-                            self.riddle_correct = True
-                            self.done = True
-                        else:
-                            # Wrong answer - shake and reset
-                            self.wrong_answer_shake = 30
-                            self.riddle_answer = ""
-                            # Explicitly ensure we're not done
-                            self.done = False
-                            self.riddle_correct = False
-                            # Play wrong answer sound
-                            if self.wrong_answer_sound:
-                                self.wrong_answer_sound.play()
-                else:
-                    # Add typed character
-                    if event.unicode and len(self.riddle_answer) < 10:
-                        self.riddle_answer += event.unicode
-    
-    def draw_gradient_background(self, surface):
-        """Draw gradient background"""
-        for y in range(HEIGHT):
-            ratio = y / HEIGHT
-            r = int(self.bg_gradient_top[0] * (1 - ratio) + self.bg_gradient_bottom[0] * ratio)
-            g = int(self.bg_gradient_top[1] * (1 - ratio) + self.bg_gradient_bottom[1] * ratio)
-            b = int(self.bg_gradient_top[2] * (1 - ratio) + self.bg_gradient_bottom[2] * ratio)
-            pygame.draw.line(surface, (r, g, b), (0, y), (WIDTH, y))
-    
-    def draw_floating_particles(self, surface):
-        """Draw floating particles"""
-        for particle in self.particles:
-            particle['y'] -= particle['speed']
-            if particle['y'] < -10:
-                particle['y'] = HEIGHT + 10
-                particle['x'] = random.randint(0, WIDTH)
-            
-            # Draw particle
-            alpha_surface = pygame.Surface((particle['size'] * 4, particle['size'] * 4), pygame.SRCALPHA)
-            pygame.draw.circle(alpha_surface, (*self.primary_color, particle['opacity']//2), 
-                             (particle['size'] * 2, particle['size'] * 2), particle['size'] * 2)
-            surface.blit(alpha_surface, (particle['x'] - particle['size'] * 2, particle['y'] - particle['size'] * 2))
-    
-    def get_rank_color(self, rank):
-        """Get color based on rank"""
-        if rank == 1:
-            return self.gold_color
-        elif rank == 2:
-            return self.silver_color
-        elif rank == 3:
-            return self.bronze_color
-        else:
-            return WHITE
-    
-    def draw(self, surface):
-        """Draw the high scores screen"""
-        self.animation_time += 1
-        self.cursor_timer += 1
-        
-        # Toggle cursor visibility every 30 frames
-        if self.cursor_timer >= 30:
-            self.cursor_visible = not self.cursor_visible
-            self.cursor_timer = 0
-        
-        # Calculate total height needed for all scores (20 scores * 40 pixels each)
-        scores = self.high_score_manager.get_high_scores()
-        self.total_height = len(scores[:20]) * 40 + 100  # Extra padding
-        
-        # Update scrolling
-        if self.auto_scroll:
-            self.scroll_offset += self.scroll_speed
-            
-            # Loop scrolling - when we've scrolled through all scores, start over
-            if self.scroll_offset > self.total_height:
-                self.scroll_offset = -200  # Start from below visible area
-        
-        # Update wrong answer shake
-        if self.wrong_answer_shake > 0:
-            self.wrong_answer_shake -= 1
+        """Draw the complete high scores screen"""
+        # Clear screen
+        surface.fill(self.bg_color)
         
         # Draw background
-        self.draw_gradient_background(surface)
-        self.draw_floating_particles(surface)
+        self.draw_stars(surface)
         
-        # Fonts
-        title_font = pygame.font.Font(None, 64)
-        header_font = pygame.font.Font(None, 36)
-        score_font = pygame.font.Font(None, 32)
-        instruction_font = pygame.font.Font(None, 28)
+        # Draw content
+        self.draw_title(surface)
+        self.draw_scores(surface)
+        self.draw_continue_prompt(surface)
         
-        # Title
-        title_text = title_font.render("HIGH SCORES", True, WHITE)
-        title_rect = title_text.get_rect(center=(WIDTH//2, 80))
-        
-        # Title glow effect
-        for offset in [(2, 2), (-2, 2), (2, -2), (-2, -2)]:
-            glow_surface = title_font.render("HIGH SCORES", True, self.accent_color)
-            glow_rect = glow_surface.get_rect(center=(WIDTH//2 + offset[0], 80 + offset[1]))
-            glow_surface.set_alpha(50)
-            surface.blit(glow_surface, glow_rect)
-        
-        surface.blit(title_text, title_rect)
-        
-        # Score table background
-        table_surface = pygame.Surface((600, 450), pygame.SRCALPHA)
-        pygame.draw.rect(table_surface, (255, 255, 255, 20), (0, 0, 600, 450), border_radius=20)
-        pygame.draw.rect(table_surface, (255, 255, 255, 40), (0, 0, 600, 450), 3, border_radius=20)
-        table_rect = table_surface.get_rect(center=(WIDTH//2, HEIGHT//2 + 20))
-        surface.blit(table_surface, table_rect)
-        
-        # Table headers (draw before clipping)
-        headers = ["RANK", "NAME", "SCORE"]
-        header_x_positions = [WIDTH//2 - 200, WIDTH//2, WIDTH//2 + 200]
-        
-        for i, (header, x) in enumerate(zip(headers, header_x_positions)):
-            header_text = header_font.render(header, True, self.primary_color)
-            header_rect = header_text.get_rect(center=(x, 170))
-            surface.blit(header_text, header_rect)
-        
-        # Create clipping area for scrolling scores
-        clip_rect = pygame.Rect(WIDTH//2 - 300, 200, 600, 360)
-        surface.set_clip(clip_rect)
-        
-        # Draw scores with scrolling
-        scores = self.high_score_manager.get_high_scores()
-        start_y = 220 - int(self.scroll_offset)
-        
-        # Draw all 20 scores (draw twice for seamless looping)
-        all_scores = scores[:20] + scores[:20]  # Duplicate for continuous scroll
-        
-        for i, score_entry in enumerate(all_scores):
-            y = start_y + i * 40
-            # Use modulo to get correct rank for duplicated scores
-            rank = (i % 20) + 1
-            color = self.get_rank_color(rank)
-            
-            # Highlight player's score with pulse effect
-            if score_entry['score'] == self.player_score:
-                pulse = abs(math.sin(self.animation_time * 0.05))
-                highlight_surface = pygame.Surface((550, 35), pygame.SRCALPHA)
-                pygame.draw.rect(highlight_surface, (*self.accent_color, int(100 * pulse)), 
-                               (0, 0, 550, 35), border_radius=10)
-                highlight_rect = highlight_surface.get_rect(center=(WIDTH//2, y))
-                surface.blit(highlight_surface, highlight_rect)
-            
-            # Rank
-            rank_text = score_font.render(str(rank), True, color)
-            rank_rect = rank_text.get_rect(center=(header_x_positions[0], y))
-            surface.blit(rank_text, rank_rect)
-            
-            # Add medal icon for top 3
-            if rank <= 3:
-                medal_radius = 12
-                medal_x = header_x_positions[0] - 40
-                pygame.draw.circle(surface, color, (medal_x, y), medal_radius)
-                pygame.draw.circle(surface, (255, 255, 255, 100), (medal_x, y), medal_radius, 2)
-            
-            # Name
-            name_text = score_font.render(score_entry['initials'], True, color)
-            name_rect = name_text.get_rect(center=(header_x_positions[1], y))
-            surface.blit(name_text, name_rect)
-            
-            # Score
-            score_text = score_font.render(f"{score_entry['score']:,}", True, color)
-            score_rect = score_text.get_rect(center=(header_x_positions[2], y))
-            surface.blit(score_text, score_rect)
-        
-        # Reset clipping
-        surface.set_clip(None)
-        
-        # Draw riddle overlay if active
-        if self.riddle_active:
-            # Darken background
-            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 180))
-            surface.blit(overlay, (0, 0))
-            
-            # Riddle box
-            riddle_width = 600
-            riddle_height = 300
-            riddle_x = WIDTH//2 - riddle_width//2
-            riddle_y = HEIGHT//2 - riddle_height//2
-            
-            # Apply shake effect if wrong answer
-            if self.wrong_answer_shake > 0:
-                shake_x = random.randint(-5, 5) * (self.wrong_answer_shake // 5)
-                riddle_x += shake_x
-            
-            # Draw riddle background
-            riddle_surface = pygame.Surface((riddle_width, riddle_height), pygame.SRCALPHA)
-            pygame.draw.rect(riddle_surface, (20, 20, 40, 240), (0, 0, riddle_width, riddle_height), border_radius=20)
-            pygame.draw.rect(riddle_surface, self.accent_color, (0, 0, riddle_width, riddle_height), 3, border_radius=20)
-            surface.blit(riddle_surface, (riddle_x, riddle_y))
-            
-            # Riddle title
-            riddle_title = title_font.render("SOLVE TO CONTINUE", True, self.accent_color)
-            title_rect = riddle_title.get_rect(center=(WIDTH//2, riddle_y + 60))
-            surface.blit(riddle_title, title_rect)
-            
-            # Riddle question
-            question_font = pygame.font.Font(None, 42)
-            question = question_font.render("What is the sum of three and four?", True, WHITE)
-            question_rect = question.get_rect(center=(WIDTH//2, riddle_y + 120))
-            surface.blit(question, question_rect)
-            
-            # Answer input field
-            input_width = 300
-            input_height = 50
-            input_x = WIDTH//2 - input_width//2
-            input_y = riddle_y + 180
-            
-            # Make input field more visible with solid background
-            pygame.draw.rect(surface, (40, 40, 60), (input_x, input_y, input_width, input_height), border_radius=10)
-            pygame.draw.rect(surface, self.primary_color, (input_x, input_y, input_width, input_height), 3, border_radius=10)
-            
-            # Draw answer text or placeholder
-            answer_font = pygame.font.Font(None, 36)
-            if self.riddle_answer:
-                answer_text = answer_font.render(self.riddle_answer, True, WHITE)
-                answer_rect = answer_text.get_rect(midleft=(input_x + 15, input_y + input_height//2))
-                surface.blit(answer_text, answer_rect)
-                cursor_x = answer_rect.right + 5
-            else:
-                # Show placeholder text
-                placeholder = answer_font.render("Type answer...", True, (100, 100, 100))
-                placeholder_rect = placeholder.get_rect(midleft=(input_x + 15, input_y + input_height//2))
-                surface.blit(placeholder, placeholder_rect)
-                cursor_x = input_x + 15
-            
-            # Draw blinking cursor
-            if self.cursor_visible:
-                cursor_rect = pygame.Rect(cursor_x, input_y + 10, 3, input_height - 20)
-                pygame.draw.rect(surface, WHITE, cursor_rect)
-            
-            # Instructions
-            hint_font = pygame.font.Font(None, 28)
-            hint = hint_font.render("Type your answer and press ENTER", True, (200, 200, 200))
-            hint_rect = hint.get_rect(center=(WIDTH//2, riddle_y + 250))
-            surface.blit(hint, hint_rect)
-            
-            # Show wrong answer feedback
-            if self.wrong_answer_shake > 0:
-                error_text = hint_font.render("Wrong! Try again!", True, (255, 100, 100))
-                error_rect = error_text.get_rect(center=(WIDTH//2, riddle_y + 280))
-                surface.blit(error_text, error_rect)
-                
-            # Hint: Show accepted answers
-            hint_font_small = pygame.font.Font(None, 20)
-            hint_text = hint_font_small.render("(Type 'seven' or '7')", True, (150, 150, 150))
-            hint_rect = hint_text.get_rect(center=(WIDTH//2, riddle_y + 310))
-            surface.blit(hint_text, hint_rect)
-        else:
-            # Normal instructions at bottom
-            instruction = instruction_font.render("Press ENTER to continue", True, self.accent_color)
-            instruction_rect = instruction.get_rect(center=(WIDTH//2, HEIGHT - 40))
-            surface.blit(instruction, instruction_rect)
-            
-            # Add pulsing effect to make it more visible
-            if self.animation_time % 60 < 30:
-                glow = instruction_font.render("Press ENTER to continue", True, WHITE)
-                glow_rect = glow.get_rect(center=(WIDTH//2, HEIGHT - 40))
-                glow.set_alpha(100)
-                surface.blit(glow, glow_rect)
-
-
-class CorrectAnswerAnimation:
-    """Cool animation screen shown after correct riddle answer"""
-    def __init__(self):
-        self.animation_time = 0
-        self.done = False
-        self.particles = []
-        self.rings = []
-        self.text_scale = 0
-        
-        # Colors
-        self.gold = (255, 215, 0)
-        self.bright_green = (0, 255, 100)
-        self.electric_blue = (0, 150, 255)
-        self.purple = (150, 0, 255)
-        
-        # Create celebration particles
-        for _ in range(100):
-            angle = random.uniform(0, math.pi * 2)
-            speed = random.uniform(5, 15)
-            self.particles.append({
-                'x': WIDTH // 2,
-                'y': HEIGHT // 2,
-                'vx': math.cos(angle) * speed,
-                'vy': math.sin(angle) * speed,
-                'color': random.choice([self.gold, self.bright_green, self.electric_blue, self.purple]),
-                'size': random.randint(3, 8),
-                'lifetime': random.randint(60, 120)
-            })
-    
-    def update(self):
-        """Update animation"""
-        self.animation_time += 1
-        
-        # Update particles
-        for particle in self.particles[:]:
-            particle['x'] += particle['vx']
-            particle['y'] += particle['vy']
-            particle['vy'] += 0.3  # Gravity
-            particle['lifetime'] -= 1
-            particle['size'] = max(1, particle['size'] - 0.1)
-            
-            if particle['lifetime'] <= 0:
-                self.particles.remove(particle)
-        
-        # Create expanding rings
-        if self.animation_time % 20 == 0 and self.animation_time < 100:
-            self.rings.append({
-                'radius': 10,
-                'alpha': 255,
-                'color': random.choice([self.gold, self.bright_green, self.electric_blue])
-            })
-        
-        # Update rings
-        for ring in self.rings[:]:
-            ring['radius'] += 8
-            ring['alpha'] -= 5
-            if ring['alpha'] <= 0:
-                self.rings.remove(ring)
-        
-        # Update text scale
-        if self.text_scale < 1:
-            self.text_scale += 0.05
-        
-        # End animation after 3 seconds
-        if self.animation_time > 180:
-            self.done = True
-    
-    def draw(self, surface):
-        """Draw the celebration animation"""
+        # Update animations
         self.update()
-        
-        # Animated gradient background
-        for y in range(HEIGHT):
-            ratio = y / HEIGHT
-            offset = math.sin(self.animation_time * 0.02 + y * 0.01) * 20
-            r = int(20 + offset + ratio * 40)
-            g = int(25 + offset + ratio * 45)
-            b = int(40 + offset + ratio * 60)
-            pygame.draw.line(surface, (r, g, b), (0, y), (WIDTH, y))
-        
-        # Draw expanding rings
-        for ring in self.rings:
-            ring_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-            pygame.draw.circle(ring_surface, (*ring['color'], ring['alpha']), 
-                             (WIDTH//2, HEIGHT//2), ring['radius'], 3)
-            surface.blit(ring_surface, (0, 0))
-        
-        # Draw particles
-        for particle in self.particles:
-            glow_surface = pygame.Surface((particle['size'] * 4, particle['size'] * 4), pygame.SRCALPHA)
-            pygame.draw.circle(glow_surface, (*particle['color'], 100), 
-                             (particle['size'] * 2, particle['size'] * 2), particle['size'] * 2)
-            pygame.draw.circle(glow_surface, particle['color'], 
-                             (particle['size'] * 2, particle['size'] * 2), particle['size'])
-            surface.blit(glow_surface, (particle['x'] - particle['size'] * 2, particle['y'] - particle['size'] * 2))
-        
-        # Draw success text with scaling animation
-        font_size = int(72 * self.text_scale)
-        if font_size > 0:
-            success_font = pygame.font.Font(None, font_size)
-            
-            # Main text with glow
-            texts = ["CORRECT!", "GET READY!"]
-            y_positions = [HEIGHT//2 - 50, HEIGHT//2 + 20]
-            
-            for text, y in zip(texts, y_positions):
-                # Glow effect
-                for offset in [(3, 3), (-3, 3), (3, -3), (-3, -3)]:
-                    glow_text = success_font.render(text, True, self.gold)
-                    glow_rect = glow_text.get_rect(center=(WIDTH//2 + offset[0], y + offset[1]))
-                    glow_surface = pygame.Surface(glow_text.get_size(), pygame.SRCALPHA)
-                    glow_surface.blit(glow_text, (0, 0))
-                    glow_surface.set_alpha(100)
-                    surface.blit(glow_surface, glow_rect)
-                
-                # Main text
-                main_text = success_font.render(text, True, WHITE)
-                main_rect = main_text.get_rect(center=(WIDTH//2, y))
-                surface.blit(main_text, main_rect)
-        
-        # Countdown text
-        if self.animation_time > 60:
-            countdown = max(0, 3 - (self.animation_time - 60) // 60)
-            if countdown > 0:
-                countdown_font = pygame.font.Font(None, 48)
-                countdown_text = countdown_font.render(f"Starting in {countdown}...", True, (200, 200, 200))
-                countdown_rect = countdown_text.get_rect(center=(WIDTH//2, HEIGHT - 100))
-                surface.blit(countdown_text, countdown_rect)

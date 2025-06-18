@@ -7,8 +7,8 @@ import random
 from constants import WIDTH, HEIGHT, WHITE, BLACK, screen, clock
 from sprites import Sheera, Asteroid, SoundWave, FireworkParticle
 from effects import Explosion, FinalDeathExplosion
-from highscores import HighScoreManager, HighScoreEntry
-from screens import RetroGameOverScreen, ModernHighScoresScreen, CorrectAnswerAnimation
+from highscores import HighScoreManager
+from screens import PurpleInitialsScreen, CleanHighScoresScreen
 from audio import load_all_sounds
 
 # Load all sounds at module level
@@ -29,11 +29,9 @@ class Game:
         
         # High score system
         self.high_score_manager = HighScoreManager()
-        self.high_score_entry = None
-        self.retro_game_over = None
-        self.game_state = "playing"  # "playing", "death_pause", "game_over_80s", "entering_initials", "showing_high_scores", "correct_animation"
+        self.game_state = "playing"  # "playing", "death_pause", "entering_initials", "showing_high_scores"
+        self.purple_initials_screen = None
         self.high_scores_screen = None
-        self.correct_animation = None
         self.transition_timer = 0
         self.transition_duration = 300  # 5 seconds at 60fps
         self.music_started = False
@@ -101,9 +99,8 @@ class Game:
                 if event.key == pygame.K_ESCAPE:
                     return False
                 
-                # UNIVERSAL RESTART: ENTER key restarts game from any death-related state
-                # BUT NOT during high scores screen (which has its own ENTER handling for riddle)
-                if event.key == pygame.K_RETURN and self.game_over and self.game_state != "showing_high_scores":
+                # Don't allow ENTER to restart during initials or high scores - they have their own handling
+                if event.key == pygame.K_RETURN and self.game_over and self.game_state == "playing":
                     return "restart"
                 
                 # Handle different game states
@@ -120,44 +117,24 @@ class Game:
                         self.paused = not self.paused
                 
                 
-                elif self.game_state == "game_over_80s":
-                    # ONLY ENTER key starts a new game - all other keys ignored
-                    if event.key == pygame.K_RETURN:
-                        return "restart"
-                    # All other keys are completely ignored
-                
                 elif self.game_state == "entering_initials":
-                    # Handle initial entry
-                    if event.type == pygame.KEYDOWN and typing_sound:
-                        if event.key not in [pygame.K_RETURN, pygame.K_ESCAPE]:
-                            typing_sound.play()
-                    self.high_score_entry.handle_input(event)
-                    if self.high_score_entry.done:
-                        # After entering initials, show high scores
-                        self.game_state = "showing_high_scores"
-                        self.high_scores_screen = ModernHighScoresScreen(self.high_score_manager, self.score, wrong_answer_sound)
-                        # Play transition and high scores music
-                        if transition_sweep:
-                            transition_sweep.play()
-                        if high_scores_music:
-                            high_scores_music.play(-1)
+                    # Handle purple initials screen input
+                    if self.purple_initials_screen:
+                        self.purple_initials_screen.handle_input(event)
+                        if self.purple_initials_screen.done:
+                            # Save the score with initials
+                            self.high_score_manager.add_score(self.purple_initials_screen.initials, self.score)
+                            # After entering initials, show high scores
+                            self.game_state = "showing_high_scores"
+                            self.high_scores_screen = CleanHighScoresScreen(self.score, self.high_score_manager.get_high_scores())
+                            # Play high scores music
+                            if high_scores_music:
+                                high_scores_music.play(-1)
+                
                 elif self.game_state == "showing_high_scores":
-                    # Handle high scores screen
-                    self.high_scores_screen.handle_input(event)
-                    # Only progress if riddle is answered correctly
-                    if self.high_scores_screen.done and self.high_scores_screen.riddle_correct:
-                        # Show celebration animation
-                        self.game_state = "correct_animation"
-                        self.correct_animation = CorrectAnswerAnimation()
-                        # Stop high scores music and play victory fanfare
-                        if high_scores_music:
-                            high_scores_music.stop()
-                        if victory_fanfare:
-                            victory_fanfare.play()
-                    # If done but not correct, this should never happen due to our validation
-                elif self.game_state == "correct_animation":
-                    # Animation handles itself, just wait for it to finish
-                    pass
+                    # Only allow ENTER to restart after 10 seconds
+                    if event.key == pygame.K_RETURN and self.high_scores_screen and self.high_scores_screen.can_continue:
+                        return "restart"
                 
             
         return True
@@ -202,34 +179,9 @@ class Game:
                         sprite.update()
                 
                 if self.death_pause_timer >= self.death_pause_duration:
-                    # Transition to 80s screen
-                    self.game_state = "game_over_80s"
-                    self.retro_game_over = RetroGameOverScreen(self.score, self.high_score_manager.get_high_scores())
-                    # Play game over music
-                    if game_over_music:
-                        game_over_music.play(-1)  # Loop indefinitely
-            # Update 80s screen if active
-            elif self.game_state == "game_over_80s" and self.retro_game_over:
-                self.retro_game_over.update()
-                # After 2 seconds, check if it's a high score
-                if self.retro_game_over.should_show_initials():
-                    # Always show high scores screen after game over
-                    self.game_state = "showing_high_scores"
-                    self.high_scores_screen = ModernHighScoresScreen(self.high_score_manager, self.score, wrong_answer_sound)
-                    # Stop game over music and play high scores music
-                    if game_over_music:
-                        game_over_music.stop()
-                    if high_scores_music:
-                        high_scores_music.play(-1)  # Loop
-            # Update other game states
-            elif self.game_state == "entering_initials" and self.high_score_entry:
-                # Update handled in draw for visual updates
-                pass
-            elif self.game_state == "showing_high_scores" and self.high_scores_screen:
-                # Update handled in draw for visual updates
-                pass
-            elif self.game_state == "correct_animation" and self.correct_animation:
-                self.correct_animation.update()
+                    # Always go to purple initials screen after death
+                    self.game_state = "entering_initials"
+                    self.purple_initials_screen = PurpleInitialsScreen(self.score, typing_sound)
             return
             
         # Check for spacebar held down (rapid fire) - only if controls aren't disabled
@@ -314,22 +266,23 @@ class Game:
                 if shield_bounce_sound:
                     shield_bounce_sound.play()
                 
-                # Split asteroid regardless of size (even size 1)
-                new_size = max(1, asteroid.size - 1)
-                for _ in range(3):  # Create 3 smaller asteroids
-                    new_asteroid = Asteroid(new_size)
-                    new_asteroid.rect.center = asteroid.rect.center
-                    new_asteroid.position = pygame.math.Vector2(asteroid.rect.center)
-                    
-                    # Bounce away from shield with random angle
-                    angle = random.uniform(0, 2 * math.pi)
-                    speed = random.uniform(2, 4) * self.speed_multiplier
-                    new_asteroid.velocity = pygame.math.Vector2(
-                        math.cos(angle) * speed, math.sin(angle) * speed
-                    )
-                    
-                    self.asteroids.add(new_asteroid)
-                    self.all_sprites.add(new_asteroid)
+                # Only split if asteroid is larger than size 1
+                if asteroid.size > 1:
+                    new_size = asteroid.size - 1
+                    for _ in range(3):  # Create 3 smaller asteroids
+                        new_asteroid = Asteroid(new_size)
+                        new_asteroid.rect.center = asteroid.rect.center
+                        new_asteroid.position = pygame.math.Vector2(asteroid.rect.center)
+                        
+                        # Bounce away from shield with random angle
+                        angle = random.uniform(0, 2 * math.pi)
+                        speed = random.uniform(2, 4) * self.speed_multiplier
+                        new_asteroid.velocity = pygame.math.Vector2(
+                            math.cos(angle) * speed, math.sin(angle) * speed
+                        )
+                        
+                        self.asteroids.add(new_asteroid)
+                        self.all_sprites.add(new_asteroid)
                 
                 # Reduce shield strength when hit
                 self.player.shield_strength = max(0, self.player.shield_strength - 10)
@@ -405,6 +358,7 @@ class Game:
     
     def draw(self):
         # Handle different game states
+        # print(f"DEBUG: Drawing game state: {self.game_state}")  # Commented to reduce spam
         if self.game_state == "death_pause":
             # Continue showing game state during death pause
             screen.fill(BLACK)
@@ -419,29 +373,14 @@ class Game:
             self.draw_text(f"Lives: {self.player.lives}", 10, 90)
             pygame.display.flip()
             return
-        elif self.game_state == "game_over_80s":
-            if self.retro_game_over:
-                self.retro_game_over.draw(screen)
-            pygame.display.flip()
-            return
         elif self.game_state == "entering_initials":
-            if self.high_score_entry:
-                self.high_score_entry.draw(screen)
+            if self.purple_initials_screen:
+                self.purple_initials_screen.draw(screen)
             pygame.display.flip()
             return
         elif self.game_state == "showing_high_scores":
             if self.high_scores_screen:
                 self.high_scores_screen.draw(screen)
-            pygame.display.flip()
-            return
-        elif self.game_state == "correct_animation":
-            if self.correct_animation:
-                self.correct_animation.draw(screen)
-                if self.correct_animation.done:
-                    # Animation finished, restart game
-                    # Stop all music
-                    pygame.mixer.stop()
-                    return "restart"
             pygame.display.flip()
             return
         
